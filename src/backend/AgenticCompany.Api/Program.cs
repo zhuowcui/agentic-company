@@ -1,5 +1,8 @@
+using System.Text;
 using AgenticCompany.Core.Services;
 using AgenticCompany.Infrastructure;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +20,24 @@ builder.Services.AddCors(options =>
     });
 });
 
+// JWT Authentication
+var jwtKey = "agentic-company-dev-signing-key-min-32-chars!";
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = "agentic-company",
+            ValidAudience = "agentic-company",
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        };
+    });
+builder.Services.AddAuthorization();
+
 // Infrastructure (DbContext, repositories, agent providers)
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -31,6 +52,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

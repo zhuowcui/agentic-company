@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<ISpecRepository, SpecRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
 
         // Agent providers
         services.AddSingleton<IAgentProvider, EchoAgentProvider>();

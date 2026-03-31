@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
     public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
     public DbSet<NodeMember> NodeMembers => Set<NodeMember>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -142,7 +143,6 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<NodeMember>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.UserId).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Role).HasConversion<string>().HasMaxLength(50);
             entity.HasIndex(e => new { e.NodeId, e.UserId }).IsUnique();
 
@@ -150,6 +150,21 @@ public class AppDbContext : DbContext
                   .WithMany(e => e.Members)
                   .HasForeignKey(e => e.NodeId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // User
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.PasswordHash).IsRequired();
+            entity.HasIndex(e => e.Email).IsUnique();
         });
     }
 }

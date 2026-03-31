@@ -2,11 +2,18 @@ import type { ReactNode } from 'react';
 
 interface AppShellProps {
   children: ReactNode;
-  onNavigate?: (page: 'dashboard' | 'nodes') => void;
+  onNavigate?: (page: string) => void;
   currentPage?: string;
 }
 
 export function AppShell({ children, onNavigate, currentPage }: AppShellProps) {
+  const token = localStorage.getItem('auth_token');
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    onNavigate?.('login');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -14,28 +21,55 @@ export function AppShell({ children, onNavigate, currentPage }: AppShellProps) {
           <h1 className="text-xl font-semibold text-gray-900">
             🏢 Agentic Company
           </h1>
-          <nav className="flex gap-1">
-            <button
-              onClick={() => onNavigate?.('dashboard')}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                currentPage === 'dashboard'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => onNavigate?.('nodes')}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                currentPage === 'nodes'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              Organization
-            </button>
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="flex gap-1">
+              <button
+                onClick={() => onNavigate?.('dashboard')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  currentPage === 'dashboard'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => onNavigate?.('nodes')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  currentPage === 'nodes'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Organization
+              </button>
+              <button
+                onClick={() => onNavigate?.('specs')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  currentPage === 'specs' || currentPage === 'spec-editor'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Specs
+              </button>
+            </nav>
+            {token ? (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Sign Out
+              </button>
+            ) : (
+              <button
+                onClick={() => onNavigate?.('login')}
+                className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                Sign In
+              </button>
+            )}
+          </div>
         </div>
       </header>
       <main className="p-6">
