@@ -7,6 +7,7 @@ using AgenticCompany.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace AgenticCompany.Api.Controllers;
@@ -32,6 +33,7 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("register")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
@@ -55,6 +57,7 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("login")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
         var user = await _users.GetByEmailAsync(request.Email.Trim().ToLowerInvariant());
@@ -62,8 +65,15 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid email or password" });
 
         var result = _passwordHasher.VerifyHashedPassword(null!, user.PasswordHash, request.Password);
-        if (result != PasswordVerificationResult.Success && result != PasswordVerificationResult.SuccessRehashNeeded)
+        if (result == PasswordVerificationResult.Failed)
             return Unauthorized(new { message = "Invalid email or password" });
+
+        if (result == PasswordVerificationResult.SuccessRehashNeeded)
+        {
+            user.PasswordHash = _passwordHasher.HashPassword(null!, request.Password);
+            user.UpdatedAt = DateTime.UtcNow;
+            await _users.UpdateAsync(user);
+        }
 
         var token = GenerateToken(user);
         return Ok(new AuthResponse(token, new UserInfo(user.Id, user.Email, user.DisplayName)));

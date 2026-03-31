@@ -279,6 +279,9 @@ namespace AgenticCompany.Infrastructure.Migrations
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("SpawnedSpecId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -298,6 +301,9 @@ namespace AgenticCompany.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PlanId");
+
+                    b.HasIndex("SpawnedSpecId")
+                        .IsUnique();
 
                     b.HasIndex("TargetNodeId");
 
@@ -398,7 +404,7 @@ namespace AgenticCompany.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("AgenticCompany.Core.Entities.TaskItem", "SourceTask")
-                        .WithOne("SpawnedSpec")
+                        .WithOne()
                         .HasForeignKey("AgenticCompany.Core.Entities.Spec", "SourceTaskId")
                         .OnDelete(DeleteBehavior.SetNull);
 
@@ -445,12 +451,19 @@ namespace AgenticCompany.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("AgenticCompany.Core.Entities.Spec", "SpawnedSpec")
+                        .WithOne()
+                        .HasForeignKey("AgenticCompany.Core.Entities.TaskItem", "SpawnedSpecId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("AgenticCompany.Core.Entities.Node", "TargetNode")
                         .WithMany()
                         .HasForeignKey("TargetNodeId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Plan");
+
+                    b.Navigation("SpawnedSpec");
 
                     b.Navigation("TargetNode");
                 });
@@ -483,8 +496,6 @@ namespace AgenticCompany.Infrastructure.Migrations
                     b.Navigation("Dependencies");
 
                     b.Navigation("Dependents");
-
-                    b.Navigation("SpawnedSpec");
                 });
 #pragma warning restore 612, 618
         }

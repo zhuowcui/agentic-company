@@ -122,38 +122,6 @@ namespace AgenticCompany.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "TaskItems",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    PlanId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: true),
-                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    AssignedTo = table.Column<string>(type: "text", nullable: true),
-                    TargetNodeId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Order = table.Column<int>(type: "integer", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaskItems", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_TaskItems_Nodes_TargetNodeId",
-                        column: x => x.TargetNodeId,
-                        principalTable: "Nodes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "FK_TaskItems_Plans_PlanId",
-                        column: x => x.PlanId,
-                        principalTable: "Plans",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Specs",
                 columns: table => new
                 {
@@ -174,10 +142,65 @@ namespace AgenticCompany.Infrastructure.Migrations
                         principalTable: "Nodes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SpecVersions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SpecId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Version = table.Column<int>(type: "integer", nullable: false),
+                    Content = table.Column<string>(type: "text", nullable: false),
+                    CreatedBy = table.Column<string>(type: "text", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SpecVersions", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Specs_TaskItems_SourceTaskId",
-                        column: x => x.SourceTaskId,
-                        principalTable: "TaskItems",
+                        name: "FK_SpecVersions_Specs_SpecId",
+                        column: x => x.SpecId,
+                        principalTable: "Specs",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TaskItems",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PlanId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    AssignedTo = table.Column<string>(type: "text", nullable: true),
+                    TargetNodeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SpawnedSpecId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Order = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TaskItems", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TaskItems_Nodes_TargetNodeId",
+                        column: x => x.TargetNodeId,
+                        principalTable: "Nodes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_TaskItems_Plans_PlanId",
+                        column: x => x.PlanId,
+                        principalTable: "Plans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TaskItems_Specs_SpawnedSpecId",
+                        column: x => x.SpawnedSpecId,
+                        principalTable: "Specs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
                 });
@@ -202,28 +225,6 @@ namespace AgenticCompany.Infrastructure.Migrations
                         name: "FK_TaskDependencies_TaskItems_TaskId",
                         column: x => x.TaskId,
                         principalTable: "TaskItems",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "SpecVersions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    SpecId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Version = table.Column<int>(type: "integer", nullable: false),
-                    Content = table.Column<string>(type: "text", nullable: false),
-                    CreatedBy = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SpecVersions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_SpecVersions_Specs_SpecId",
-                        column: x => x.SpecId,
-                        principalTable: "Specs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -292,6 +293,12 @@ namespace AgenticCompany.Infrastructure.Migrations
                 column: "PlanId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_TaskItems_SpawnedSpecId",
+                table: "TaskItems",
+                column: "SpawnedSpecId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TaskItems_TargetNodeId",
                 table: "TaskItems",
                 column: "TargetNodeId");
@@ -309,6 +316,14 @@ namespace AgenticCompany.Infrastructure.Migrations
                 principalTable: "Specs",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_Specs_TaskItems_SourceTaskId",
+                table: "Specs",
+                column: "SourceTaskId",
+                principalTable: "TaskItems",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.SetNull);
         }
 
         /// <inheritdoc />
@@ -325,6 +340,10 @@ namespace AgenticCompany.Infrastructure.Migrations
             migrationBuilder.DropForeignKey(
                 name: "FK_Plans_Specs_SpecId",
                 table: "Plans");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_TaskItems_Specs_SpawnedSpecId",
+                table: "TaskItems");
 
             migrationBuilder.DropTable(
                 name: "NodeMembers");

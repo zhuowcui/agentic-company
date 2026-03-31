@@ -32,6 +32,9 @@ public class TasksController : ControllerBase
     [HttpGet("api/plans/{planId:guid}/tasks")]
     public async Task<ActionResult<List<TaskItemResponse>>> GetByPlan(Guid planId, CancellationToken ct)
     {
+        var plan = await _planRepo.GetByIdAsync(planId, ct);
+        if (plan is null) return NotFound(new { error = $"Plan {planId} not found." });
+
         var tasks = await _taskRepo.GetByPlanIdAsync(planId, ct);
         return Ok(tasks.Select(t => t.ToResponse()).ToList());
     }

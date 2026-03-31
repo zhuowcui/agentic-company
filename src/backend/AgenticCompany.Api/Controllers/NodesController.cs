@@ -53,6 +53,13 @@ public class NodesController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest("Name is required");
 
+        if (request.ParentId.HasValue)
+        {
+            var parent = await _nodeRepo.GetByIdAsync(request.ParentId.Value, ct);
+            if (parent is null)
+                return BadRequest(new { error = $"Parent node {request.ParentId.Value} does not exist." });
+        }
+
         var node = new Node
         {
             Name = request.Name,

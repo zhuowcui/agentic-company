@@ -24,6 +24,9 @@ public class PlansController : ControllerBase
     [HttpGet("api/specs/{specId:guid}/plans")]
     public async Task<ActionResult<List<PlanResponse>>> GetBySpec(Guid specId, CancellationToken ct)
     {
+        var spec = await _specRepo.GetByIdAsync(specId, ct);
+        if (spec is null) return NotFound(new { error = $"Spec {specId} not found." });
+
         var plans = await _planRepo.GetBySpecIdAsync(specId, ct);
         return Ok(plans.Select(p => p.ToResponse()).ToList());
     }
