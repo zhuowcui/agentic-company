@@ -9,13 +9,17 @@ export function NodesPage() {
   const { data: roots, isLoading } = useRootNodes();
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [expandedRootId, setExpandedRootId] = useState<string | undefined>();
 
-  // Load full tree for selected root
-  const selectedRootId = selectedNode
-    ? (roots?.find(r => r.id === selectedNode.id)?.id ?? roots?.[0]?.id)
-    : roots?.[0]?.id;
-
+  const selectedRootId = expandedRootId ?? roots?.[0]?.id;
   const { data: treeData } = useNodeTree(selectedRootId ?? '');
+
+  const handleNodeSelect = (node: Node) => {
+    setSelectedNode(node);
+    if (!node.parentId) {
+      setExpandedRootId(node.id);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -53,22 +57,14 @@ export function NodesPage() {
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
               Hierarchy
             </h2>
-            {treeData ? (
+            {roots.map((root) => (
               <TreeNode
-                node={treeData}
+                key={root.id}
+                node={treeData && selectedRootId === root.id ? treeData : root}
                 selectedId={selectedNode?.id}
-                onSelect={setSelectedNode}
+                onSelect={handleNodeSelect}
               />
-            ) : (
-              roots.map((root) => (
-                <TreeNode
-                  key={root.id}
-                  node={root}
-                  selectedId={selectedNode?.id}
-                  onSelect={setSelectedNode}
-                />
-              ))
-            )}
+            ))}
             {selectedNode && (
               <button
                 onClick={() => setShowCreate(true)}

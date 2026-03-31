@@ -6,6 +6,8 @@ import { NodesPage } from './features/nodes/NodesPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { SpecsPage } from './features/specs/SpecsPage';
 import { SpecEditorPage } from './features/specs/SpecEditorPage';
+import { PlansPage } from './features/plans/PlansPage';
+import { TasksPage } from './features/tasks/TasksPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 
@@ -14,6 +16,8 @@ type Page =
   | { name: 'nodes' }
   | { name: 'specs' }
   | { name: 'spec-editor'; specId?: string; nodeId?: string }
+  | { name: 'plans'; specId?: string }
+  | { name: 'tasks'; planId: string }
   | { name: 'login' }
   | { name: 'register' };
 
@@ -21,6 +25,14 @@ function parseHash(): Page {
   const hash = window.location.hash;
   if (hash.startsWith('#/login')) return { name: 'login' };
   if (hash.startsWith('#/register')) return { name: 'register' };
+  if (hash.startsWith('#/plans')) {
+    const params = new URLSearchParams(hash.split('?')[1] ?? '');
+    return { name: 'plans', specId: params.get('specId') ?? undefined };
+  }
+  if (hash.startsWith('#/tasks')) {
+    const params = new URLSearchParams(hash.split('?')[1] ?? '');
+    return { name: 'tasks', planId: params.get('planId') ?? '' };
+  }
   if (hash.startsWith('#/specs/new')) {
     const params = new URLSearchParams(hash.split('?')[1] ?? '');
     return { name: 'spec-editor', nodeId: params.get('nodeId') ?? undefined };
@@ -58,6 +70,10 @@ function App() {
       window.location.hash = '#/nodes';
     } else if (target === 'specs') {
       window.location.hash = '#/specs';
+    } else if (target === 'plans' || target.startsWith('plans?')) {
+      window.location.hash = `#/${target}`;
+    } else if (target === 'tasks' || target.startsWith('tasks?')) {
+      window.location.hash = `#/${target}`;
     } else if (target.startsWith('dashboard/')) {
       window.location.hash = `#/${target}`;
     } else if (target.startsWith('specs/new')) {
@@ -85,6 +101,10 @@ function App() {
             onNavigate={navigate}
           />
         );
+      case 'plans':
+        return <PlansPage specId={page.specId} onNavigate={navigate} />;
+      case 'tasks':
+        return <TasksPage planId={page.planId} onNavigate={navigate} />;
       case 'dashboard':
         return <DashboardPage nodeId={page.nodeId} />;
     }

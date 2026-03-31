@@ -53,6 +53,26 @@ export function AppShell({ children, onNavigate, currentPage }: AppShellProps) {
               >
                 Specs
               </button>
+              <button
+                onClick={() => onNavigate?.('plans')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  currentPage === 'plans'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Plans
+              </button>
+              <button
+                onClick={() => onNavigate?.('tasks')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  currentPage === 'tasks'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Tasks
+              </button>
             </nav>
             {token ? (
               <button

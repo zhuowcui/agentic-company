@@ -11,12 +11,17 @@ interface SpecsPageProps {
 export function SpecsPage({ onNavigate }: SpecsPageProps) {
   const { data: roots, isLoading: rootsLoading } = useRootNodes();
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [expandedRootId, setExpandedRootId] = useState<string | undefined>();
 
-  const selectedRootId = selectedNode
-    ? (roots?.find((r) => r.id === selectedNode.id)?.id ?? roots?.[0]?.id)
-    : roots?.[0]?.id;
-
+  const selectedRootId = expandedRootId ?? roots?.[0]?.id;
   const { data: treeData } = useNodeTree(selectedRootId ?? '');
+
+  const handleNodeSelect = (node: Node) => {
+    setSelectedNode(node);
+    if (!node.parentId) {
+      setExpandedRootId(node.id);
+    }
+  };
 
   const { data: specs, isLoading: specsLoading } = useSpecs(selectedNode?.id ?? '');
 
@@ -65,19 +70,13 @@ export function SpecsPage({ onNavigate }: SpecsPageProps) {
           </h2>
           {rootsLoading ? (
             <div className="text-gray-500 text-sm">Loading...</div>
-          ) : treeData ? (
-            <NodeTreeSelector
-              node={treeData}
-              selectedId={selectedNode?.id}
-              onSelect={setSelectedNode}
-            />
           ) : roots?.length ? (
             roots.map((root) => (
               <NodeTreeSelector
                 key={root.id}
-                node={root}
+                node={treeData && selectedRootId === root.id ? treeData : root}
                 selectedId={selectedNode?.id}
-                onSelect={setSelectedNode}
+                onSelect={handleNodeSelect}
               />
             ))
           ) : (
