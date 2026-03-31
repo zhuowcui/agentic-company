@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 
-export function AppShell({ children }: { children: ReactNode }) {
+interface AppShellProps {
+  children: ReactNode;
+  onNavigate?: (page: 'dashboard' | 'nodes') => void;
+  currentPage?: string;
+}
+
+export function AppShell({ children, onNavigate, currentPage }: AppShellProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -8,9 +14,27 @@ export function AppShell({ children }: { children: ReactNode }) {
           <h1 className="text-xl font-semibold text-gray-900">
             🏢 Agentic Company
           </h1>
-          <nav className="flex gap-4 text-sm text-gray-600">
-            <a href="/" className="hover:text-gray-900">Dashboard</a>
-            <a href="/nodes" className="hover:text-gray-900">Organization</a>
+          <nav className="flex gap-1">
+            <button
+              onClick={() => onNavigate?.('dashboard')}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                currentPage === 'dashboard'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => onNavigate?.('nodes')}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                currentPage === 'nodes'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              Organization
+            </button>
           </nav>
         </div>
       </header>

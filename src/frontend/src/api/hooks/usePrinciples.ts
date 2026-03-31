@@ -1,0 +1,40 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '../client';
+import type { Principle, EffectivePrinciple } from '../schemas/principle';
+
+export const principleKeys = {
+  all: ['principles'] as const,
+  byNode: (nodeId: string) => [...principleKeys.all, 'node', nodeId] as const,
+  effective: (nodeId: string) => [...principleKeys.all, 'effective', nodeId] as const,
+};
+
+export function usePrinciples(nodeId: string) {
+  return useQuery({
+    queryKey: principleKeys.byNode(nodeId),
+    queryFn: () => apiFetch<Principle[]>(`/nodes/${nodeId}/principles`),
+    enabled: !!nodeId,
+  });
+}
+
+export function useEffectivePrinciples(nodeId: string) {
+  return useQuery({
+    queryKey: principleKeys.effective(nodeId),
+    queryFn: () => apiFetch<EffectivePrinciple[]>(`/nodes/${nodeId}/principles/effective`),
+    enabled: !!nodeId,
+  });
+}
+
+export function useCreatePrinciple(nodeId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { title: string; content: string; order: number; isOverride?: boolean }) =>
+      apiFetch<Principle>(`/nodes/${nodeId}/principles`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: principleKeys.byNode(nodeId) });
+      queryClient.invalidateQueries({ queryKey: principleKeys.effective(nodeId) });
+    },
+  });
+}
