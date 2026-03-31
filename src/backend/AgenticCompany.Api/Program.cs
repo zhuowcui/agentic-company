@@ -1,4 +1,5 @@
 using AgenticCompany.Core.Services;
+using AgenticCompany.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,9 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+
+// Infrastructure (DbContext, repositories, agent providers)
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // Domain services
 builder.Services.AddSingleton<PrincipleInheritanceService>();
