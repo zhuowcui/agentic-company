@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: agentic_company
+      POSTGRES_USER: agentic
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./src/backend
+      dockerfile: AgenticCompany.Api/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=agentic_company;Username=agentic;Password=dev_password
+    ports:
+      - "5000:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
