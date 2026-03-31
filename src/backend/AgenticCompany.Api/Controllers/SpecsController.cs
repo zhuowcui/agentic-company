@@ -1,0 +1,100 @@
+using AgenticCompany.Api.Mapping;
+using AgenticCompany.Api.Models;
+using AgenticCompany.Core.Entities;
+using AgenticCompany.Core.Enums;
+using AgenticCompany.Core.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+
+namespace AgenticCompany.Api.Controllers;
+
+[ApiController]
+public class SpecsController : ControllerBase
+{
+    private readonly ISpecRepository _specRepo;
+    private readonly INodeRepository _nodeRepo;
+
+    public SpecsController(ISpecRepository specRepo, INodeRepository nodeRepo)
+    {
+        _specRepo = specRepo;
+        _nodeRepo = nodeRepo;
+    }
+
+    [HttpGet("api/nodes/{nodeId:guid}/specs")]
+    public async Task<ActionResult<List<SpecResponse>>> GetByNode(Guid nodeId, CancellationToken ct)
+    {
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return NotFound("Node not found");
+
+        var specs = await _specRepo.GetByNodeIdAsync(nodeId, ct);
+        return Ok(specs.Select(s => s.ToResponse()).ToList());
+    }
+
+    [HttpGet("api/specs/{id:guid}")]
+    public async Task<ActionResult<SpecResponse>> GetById(Guid id, CancellationToken ct)
+    {
+        var spec = await _specRepo.GetByIdAsync(id, ct);
+        if (spec is null) return NotFound();
+        return Ok(spec.ToResponse(includeVersions: true));
+    }
+
+    [HttpPost("api/nodes/{nodeId:guid}/specs")]
+    public async Task<ActionResult<SpecResponse>> Create(Guid nodeId, [FromBody] CreateSpecRequest request, CancellationToken ct)
+    {
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return NotFound("Node not found");
+
+        var spec = new Spec
+        {
+            NodeId = nodeId,
+            Title = request.Title,
+            Status = SpecStatus.Draft,
+        };
+
+        var created = await _specRepo.CreateAsync(spec, ct);
+
+        // Create initial version
+        created.Versions.Add(new SpecVersion
+        {
+            Id = Guid.NewGuid(),
+            SpecId = created.Id,
+            Version = 1,
+            Content = request.Content,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await _specRepo.UpdateAsync(created, ct);
+
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToResponse(includeVersions: true));
+    }
+
+    [HttpPut("api/specs/{id:guid}")]
+    public async Task<ActionResult<SpecResponse>> Update(Guid id, [FromBody] UpdateSpecRequest request, CancellationToken ct)
+    {
+        var spec = await _specRepo.GetByIdAsync(id, ct);
+        if (spec is null) return NotFound();
+
+        var latestVersion = spec.Versions?.MaxBy(v => v.Version)?.Version ?? 0;
+        spec.Versions ??= new List<SpecVersion>();
+        spec.Versions.Add(new SpecVersion
+        {
+            Id = Guid.NewGuid(),
+            SpecId = id,
+            Version = latestVersion + 1,
+            Content = request.Content,
+            CreatedAt = DateTime.UtcNow,
+        });
+
+        await _specRepo.UpdateAsync(spec, ct);
+        return Ok(spec.ToResponse(includeVersions: true));
+    }
+
+    [HttpPost("api/specs/{id:guid}/approve")]
+    public async Task<ActionResult<SpecResponse>> Approve(Guid id, CancellationToken ct)
+    {
+        var spec = await _specRepo.GetByIdAsync(id, ct);
+        if (spec is null) return NotFound();
+
+        spec.Status = SpecStatus.Approved;
+        await _specRepo.UpdateAsync(spec, ct);
+        return Ok(spec.ToResponse());
+    }
+}
