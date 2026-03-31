@@ -5,7 +5,6 @@ export type SpecStatus = z.infer<typeof SpecStatus>;
 
 export const SpecVersionSchema = z.object({
   id: z.string().uuid(),
-  specId: z.string().uuid(),
   version: z.number().int(),
   content: z.string(),
   createdBy: z.string().nullable(),

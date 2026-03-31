@@ -19,6 +19,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=agentic_company;Username=agentic;Password=dev_password
+      - Jwt__SigningKey=agentic-company-docker-dev-key-minimum-32-chars!
+      - Agent__DefaultProvider=echo
     ports:
       - "5000:8080"
     depends_on:
