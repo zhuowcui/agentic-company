@@ -7,13 +7,14 @@ public class ClaudeAgentProvider : IAgentProvider
     public string Name => "claude";
 
     public Task<string> GenerateAsync(string prompt, string context, CancellationToken ct = default)
-    {
-        // TODO: Implement with Anthropic API client
-        throw new NotImplementedException("Claude provider not yet configured. Set the Anthropic API key in configuration.");
-    }
+        => Task.FromResult("[Claude provider is not configured. Set the ANTHROPIC_API_KEY environment variable and restart the server.]");
 
     public Task<IAsyncEnumerable<string>> StreamAsync(string prompt, string context, CancellationToken ct = default)
+        => Task.FromResult(ToAsyncEnumerable("[Claude provider is not configured. Set the ANTHROPIC_API_KEY environment variable and restart the server.]"));
+
+    private static async IAsyncEnumerable<string> ToAsyncEnumerable(string message)
     {
-        throw new NotImplementedException("Claude streaming not yet configured.");
+        yield return message;
+        await Task.CompletedTask;
     }
 }

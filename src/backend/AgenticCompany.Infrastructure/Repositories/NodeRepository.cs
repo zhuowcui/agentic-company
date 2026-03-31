@@ -54,6 +54,15 @@ public class NodeRepository : INodeRepository
             .ToListAsync(ct);
     }
 
+    public async Task<List<Node>> GetDescendantsByPathPrefixAsync(string pathPrefix, CancellationToken ct = default)
+    {
+        return await _db.Nodes
+            .Where(n => n.Path.StartsWith(pathPrefix + "."))
+            .OrderBy(n => n.Depth)
+            .ThenBy(n => n.Name)
+            .ToListAsync(ct);
+    }
+
     public async Task<Node> CreateAsync(Node node, CancellationToken ct = default)
     {
         node.Id = node.Id == Guid.Empty ? Guid.NewGuid() : node.Id;
@@ -82,6 +91,17 @@ public class NodeRepository : INodeRepository
     {
         node.UpdatedAt = DateTime.UtcNow;
         _db.Nodes.Update(node);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateRangeAsync(IEnumerable<Node> nodes, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var node in nodes)
+        {
+            node.UpdatedAt = now;
+        }
+        _db.Nodes.UpdateRange(nodes);
         await _db.SaveChangesAsync(ct);
     }
 

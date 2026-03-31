@@ -3,11 +3,13 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
+[Authorize]
 public class SpecsController : ControllerBase
 {
     private readonly ISpecRepository _specRepo;

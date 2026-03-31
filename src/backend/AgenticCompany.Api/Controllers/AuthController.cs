@@ -1,38 +1,50 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
+    private const string DevFallbackKey = "agentic-company-dev-signing-key-min-32-chars!";
+    private static readonly PasswordHasher<User> _passwordHasher = new();
+
     private readonly IUserRepository _users;
-    private const string SigningKey = "agentic-company-dev-signing-key-min-32-chars!";
-    private const string Salt = "agentic-company-static-salt";
+    private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
 
-    public AuthController(IUserRepository users) => _users = users;
+    public AuthController(IUserRepository users, IConfiguration configuration, IWebHostEnvironment environment)
+    {
+        _users = users;
+        _configuration = configuration;
+        _environment = environment;
+    }
 
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
-        var existing = await _users.GetByEmailAsync(request.Email);
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+        var existing = await _users.GetByEmailAsync(normalizedEmail);
         if (existing is not null)
             return Conflict(new { message = "Email already registered" });
 
         var user = new User
         {
-            Email = request.Email.Trim().ToLowerInvariant(),
+            Email = normalizedEmail,
             DisplayName = request.DisplayName.Trim(),
-            PasswordHash = HashPassword(request.Password),
+            PasswordHash = _passwordHasher.HashPassword(null!, request.Password),
         };
 
         user = await _users.CreateAsync(user);
@@ -41,18 +53,22 @@ public class AuthController : ControllerBase
         return Ok(new AuthResponse(token, new UserInfo(user.Id, user.Email, user.DisplayName)));
     }
 
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
         var user = await _users.GetByEmailAsync(request.Email.Trim().ToLowerInvariant());
-        if (user is null || user.PasswordHash != HashPassword(request.Password))
+        if (user is null)
+            return Unauthorized(new { message = "Invalid email or password" });
+
+        var result = _passwordHasher.VerifyHashedPassword(null!, user.PasswordHash, request.Password);
+        if (result != PasswordVerificationResult.Success && result != PasswordVerificationResult.SuccessRehashNeeded)
             return Unauthorized(new { message = "Invalid email or password" });
 
         var token = GenerateToken(user);
         return Ok(new AuthResponse(token, new UserInfo(user.Id, user.Email, user.DisplayName)));
     }
 
-    [Authorize]
     [HttpGet("me")]
     public async Task<ActionResult<UserInfo>> Me()
     {
@@ -66,9 +82,18 @@ public class AuthController : ControllerBase
         return Ok(new UserInfo(user.Id, user.Email, user.DisplayName));
     }
 
-    private static string GenerateToken(User user)
+    private string GenerateToken(User user)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
+        var signingKey = _configuration["Jwt:SigningKey"];
+        if (string.IsNullOrWhiteSpace(signingKey))
+        {
+            if (_environment.IsDevelopment())
+                signingKey = DevFallbackKey;
+            else
+                throw new InvalidOperationException("Jwt:SigningKey is not configured.");
+        }
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -87,13 +112,5 @@ public class AuthController : ControllerBase
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    private static string HashPassword(string password)
-    {
-        var keyBytes = Encoding.UTF8.GetBytes(Salt);
-        using var hmac = new HMACSHA256(keyBytes);
-        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-        return Convert.ToBase64String(hash);
     }
 }

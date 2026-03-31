@@ -67,7 +67,7 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.SourceTask)
-                  .WithOne(t => t.SpawnedSpec)
+                  .WithOne()
                   .HasForeignKey<Spec>(e => e.SourceTaskId)
                   .OnDelete(DeleteBehavior.SetNull);
         });
@@ -118,9 +118,10 @@ public class AppDbContext : DbContext
                   .HasForeignKey(e => e.TargetNodeId)
                   .OnDelete(DeleteBehavior.SetNull);
 
-            // SpawnedSpec relationship configured on Spec side via SourceTaskId FK.
-            // Ignore SpawnedSpecId so EF doesn't create a second FK relationship.
-            entity.Ignore(e => e.SpawnedSpecId);
+            entity.HasOne(e => e.SpawnedSpec)
+                  .WithOne()
+                  .HasForeignKey<TaskItem>(e => e.SpawnedSpecId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         // TaskDependency

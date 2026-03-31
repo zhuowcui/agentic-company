@@ -3,11 +3,13 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class NodesController : ControllerBase
 {
@@ -84,8 +86,11 @@ public class NodesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var node = await _nodeRepo.GetByIdAsync(id, ct);
+        var node = await _nodeRepo.GetWithChildrenAsync(id, ct);
         if (node is null) return NotFound();
+
+        if (node.Children.Any())
+            return Conflict("Cannot delete a node that has children. Move or delete children first.");
 
         await _nodeRepo.DeleteAsync(id, ct);
         return NoContent();
@@ -106,10 +111,27 @@ public class NodesController : ControllerBase
         if (descendants.Any(d => d.Id == request.NewParentId))
             return BadRequest("Cannot move a node under its own descendant");
 
+        var oldPath = node.Path;
+        var oldDepth = node.Depth;
+
+        // Fetch descendants by old path prefix before changing the node
+        var descendantNodes = await _nodeRepo.GetDescendantsByPathPrefixAsync(oldPath, ct);
+
+        // Update the moved node
         node.ParentId = request.NewParentId;
         node.Path = $"{newParent.Path}.{node.Id}";
         node.Depth = newParent.Depth + 1;
-        await _nodeRepo.UpdateAsync(node, ct);
+
+        var depthDelta = node.Depth - oldDepth;
+
+        // Update all descendants' paths and depths
+        foreach (var desc in descendantNodes)
+        {
+            desc.Path = node.Path + desc.Path[oldPath.Length..];
+            desc.Depth += depthDelta;
+        }
+
+        await _nodeRepo.UpdateRangeAsync(descendantNodes.Prepend(node), ct);
 
         return Ok(node.ToResponse());
     }

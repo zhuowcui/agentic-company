@@ -1,162 +1,59 @@
 using AgenticCompany.Api.Models;
-using AgenticCompany.Infrastructure.Data;
+using AgenticCompany.Core.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/dashboard")]
 public class DashboardController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly IDashboardRepository _dashboardRepo;
 
-    public DashboardController(AppDbContext db) => _db = db;
+    public DashboardController(IDashboardRepository dashboardRepo) => _dashboardRepo = dashboardRepo;
 
     [HttpGet("node/{nodeId}/stats")]
-    public async Task<ActionResult<NodeStatsResponse>> GetNodeStats(Guid nodeId)
+    public async Task<ActionResult<NodeStatsResponse>> GetNodeStats(Guid nodeId, CancellationToken ct)
     {
-        var nodeExists = await _db.Nodes.AnyAsync(n => n.Id == nodeId);
-        if (!nodeExists) return NotFound();
-
-        var specsByStatus = await _db.Specs
-            .Where(s => s.NodeId == nodeId)
-            .GroupBy(s => s.Status)
-            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
-            .ToDictionaryAsync(x => x.Status, x => x.Count);
-
-        var plansByStatus = await _db.Plans
-            .Where(p => p.Spec.NodeId == nodeId)
-            .GroupBy(p => p.Status)
-            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
-            .ToDictionaryAsync(x => x.Status, x => x.Count);
-
-        var tasksByStatus = await _db.TaskItems
-            .Where(t => t.Plan.Spec.NodeId == nodeId)
-            .GroupBy(t => t.Status)
-            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
-            .ToDictionaryAsync(x => x.Status, x => x.Count);
-
-        var childNodeCount = await _db.Nodes.CountAsync(n => n.ParentId == nodeId);
-
-        var activePrincipleCount = await _db.Principles.CountAsync(p => p.NodeId == nodeId);
+        var stats = await _dashboardRepo.GetNodeStatsAsync(nodeId, ct);
+        if (stats is null) return NotFound();
 
         return Ok(new NodeStatsResponse(
-            specsByStatus,
-            plansByStatus,
-            tasksByStatus,
-            childNodeCount,
-            activePrincipleCount
+            stats.SpecsByStatus,
+            stats.PlansByStatus,
+            stats.TasksByStatus,
+            stats.ChildNodeCount,
+            stats.ActivePrincipleCount
         ));
     }
 
     [HttpGet("node/{nodeId}/activity")]
-    public async Task<ActionResult<NodeActivityResponse>> GetNodeActivity(Guid nodeId)
+    public async Task<ActionResult<NodeActivityResponse>> GetNodeActivity(Guid nodeId, CancellationToken ct)
     {
-        var nodeExists = await _db.Nodes.AnyAsync(n => n.Id == nodeId);
-        if (!nodeExists) return NotFound();
+        var activities = await _dashboardRepo.GetNodeActivityAsync(nodeId, ct);
+        if (activities is null) return NotFound();
 
-        var recentSpecs = await _db.Specs
-            .Where(s => s.NodeId == nodeId)
-            .OrderByDescending(s => s.UpdatedAt)
-            .Take(10)
-            .Select(s => new ActivityItem(
-                s.UpdatedAt,
-                "spec",
-                s.Title,
-                s.Status.ToString(),
-                s.Id
-            ))
-            .ToListAsync();
-
-        var recentTasks = await _db.TaskItems
-            .Where(t => t.Plan.Spec.NodeId == nodeId)
-            .OrderByDescending(t => t.UpdatedAt)
-            .Take(10)
-            .Select(t => new ActivityItem(
-                t.UpdatedAt,
-                "task",
-                t.Title,
-                t.Status.ToString(),
-                t.Id
-            ))
-            .ToListAsync();
-
-        var activities = recentSpecs
-            .Concat(recentTasks)
-            .OrderByDescending(a => a.Timestamp)
-            .Take(20)
+        var items = activities
+            .Select(a => new ActivityItem(a.Timestamp, a.Type, a.Title, a.Status, a.Id))
             .ToList();
 
-        return Ok(new NodeActivityResponse(activities));
+        return Ok(new NodeActivityResponse(items));
     }
 
     [HttpGet("org-overview")]
-    public async Task<ActionResult<OrgOverviewResponse>> GetOrgOverview()
+    public async Task<ActionResult<OrgOverviewResponse>> GetOrgOverview(CancellationToken ct)
     {
-        var nodesByType = await _db.Nodes
-            .GroupBy(n => n.Type)
-            .Select(g => new { Type = g.Key.ToString(), Count = g.Count() })
-            .ToDictionaryAsync(x => x.Type, x => x.Count);
-
-        var totalNodes = await _db.Nodes.CountAsync();
-        var totalSpecs = await _db.Specs.CountAsync();
-        var totalPlans = await _db.Plans.CountAsync();
-        var totalTasks = await _db.TaskItems.CountAsync();
-
-        // Cascade depth: count longest chain of Spec→Plan→Task(Cascaded)→Spec→...
-        var cascadedTasks = await _db.TaskItems
-            .Where(t => t.Status == Core.Enums.TaskItemStatus.Cascaded)
-            .Select(t => new { t.Id, t.Plan.Spec.SourceTaskId })
-            .ToListAsync();
-
-        var specsWithSource = await _db.Specs
-            .Where(s => s.SourceTaskId != null)
-            .Select(s => new { s.Id, s.SourceTaskId })
-            .ToListAsync();
-
-        // Build a map: taskId → spawned specId
-        var taskToSpec = specsWithSource.ToDictionary(s => s.SourceTaskId!.Value, s => s.Id);
-
-        // Build a map: specId → cascaded task ids from that spec's plans
-        var specToCascadedTasks = cascadedTasks
-            .Where(t => t.SourceTaskId != null)
-            .GroupBy(t => t.SourceTaskId!.Value)
-            .ToDictionary(g => g.Key, g => g.Select(t => t.Id).ToList());
-
-        int maxDepth = 0;
-        foreach (var spec in specsWithSource)
-        {
-            int depth = 1;
-            var visited = new HashSet<Guid> { spec.Id };
-            var currentSpecId = spec.Id;
-
-            while (specToCascadedTasks.TryGetValue(currentSpecId, out var childTasks))
-            {
-                bool found = false;
-                foreach (var taskId in childTasks)
-                {
-                    if (taskToSpec.TryGetValue(taskId, out var nextSpecId) && visited.Add(nextSpecId))
-                    {
-                        currentSpecId = nextSpecId;
-                        depth++;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) break;
-            }
-
-            if (depth > maxDepth) maxDepth = depth;
-        }
+        var overview = await _dashboardRepo.GetOrgOverviewAsync(ct);
 
         return Ok(new OrgOverviewResponse(
-            nodesByType,
-            totalNodes,
-            totalSpecs,
-            totalPlans,
-            totalTasks,
-            maxDepth
+            overview.NodesByType,
+            overview.TotalNodes,
+            overview.TotalSpecs,
+            overview.TotalPlans,
+            overview.TotalTasks,
+            overview.MaxCascadeDepth
         ));
     }
 }

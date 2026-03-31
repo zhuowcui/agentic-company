@@ -21,7 +21,18 @@ builder.Services.AddCors(options =>
 });
 
 // JWT Authentication
-var jwtKey = "agentic-company-dev-signing-key-min-32-chars!";
+const string devFallbackKey = "agentic-company-dev-signing-key-min-32-chars!";
+var jwtKey = builder.Configuration["Jwt:SigningKey"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    if (builder.Environment.IsDevelopment())
+        jwtKey = devFallbackKey;
+    else
+        throw new InvalidOperationException("Jwt:SigningKey is not configured. Set a signing key of at least 32 characters.");
+}
+if (jwtKey.Length < 32)
+    throw new InvalidOperationException($"Jwt:SigningKey must be at least 32 characters (current length: {jwtKey.Length}).");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

@@ -3,11 +3,13 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Core.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/nodes/{nodeId:guid}/principles")]
 public class PrinciplesController : ControllerBase
 {

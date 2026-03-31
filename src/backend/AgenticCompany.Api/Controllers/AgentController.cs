@@ -3,15 +3,17 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Core.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/agent")]
 public class AgentController : ControllerBase
 {
-    private const string DefaultProvider = "echo";
+    private readonly string _defaultProvider;
 
     private readonly IAgentService _agentService;
     private readonly INodeRepository _nodeRepo;
@@ -28,7 +30,8 @@ public class AgentController : ControllerBase
         IPlanRepository planRepo,
         ITaskItemRepository taskRepo,
         IPrincipleRepository principleRepo,
-        PrincipleInheritanceService principleService)
+        PrincipleInheritanceService principleService,
+        IConfiguration configuration)
     {
         _agentService = agentService;
         _nodeRepo = nodeRepo;
@@ -37,6 +40,7 @@ public class AgentController : ControllerBase
         _taskRepo = taskRepo;
         _principleRepo = principleRepo;
         _principleService = principleService;
+        _defaultProvider = configuration["Agent:DefaultProvider"] ?? "echo";
     }
 
     /// <summary>Generate a draft spec body using AI</summary>
@@ -65,7 +69,7 @@ public class AgentController : ControllerBase
             {principlesText}
             """;
 
-        var provider = request.Provider ?? DefaultProvider;
+        var provider = request.Provider ?? _defaultProvider;
         var draft = await _agentService.GenerateAsync(provider, prompt, context, ct);
 
         return Ok(new DraftSpecResponse(draft));
@@ -111,7 +115,7 @@ public class AgentController : ControllerBase
             {principlesText}
             """;
 
-        var provider = request.Provider ?? DefaultProvider;
+        var provider = request.Provider ?? _defaultProvider;
         var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
 
         var (planText, tasks) = ParsePlanResponse(result);
@@ -171,7 +175,7 @@ public class AgentController : ControllerBase
 
         var context = $"Parent node: {node.Name} (Type: {node.Type}, Depth: {node.Depth})";
 
-        var provider = request.Provider ?? DefaultProvider;
+        var provider = request.Provider ?? _defaultProvider;
         var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
 
         var (suggestedNodeId, suggestedNodeName, draftSpec) = ParseCascadeResponse(result, children);
@@ -220,7 +224,7 @@ public class AgentController : ControllerBase
             {principlesText}
             """;
 
-        var provider = request.Provider ?? DefaultProvider;
+        var provider = request.Provider ?? _defaultProvider;
         var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
 
         var review = ParseReviewResponse(result);
