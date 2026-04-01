@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
+using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -51,7 +52,7 @@ public class AgentController : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        return membership != null && membership.Role != NodeRole.Viewer;
     }
 
     /// <summary>Generate a draft spec body using AI</summary>

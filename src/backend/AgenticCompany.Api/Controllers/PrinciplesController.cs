@@ -2,6 +2,7 @@ using System.Security.Claims;
 using AgenticCompany.Api.Mapping;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
+using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -35,7 +36,7 @@ public class PrinciplesController : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        return membership != null && membership.Role != NodeRole.Viewer;
     }
 
     /// <summary>Get local principles for a node</summary>

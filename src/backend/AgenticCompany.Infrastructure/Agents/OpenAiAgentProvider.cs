@@ -49,14 +49,21 @@ public class OpenAiAgentProvider : IAgentProvider
         }
 
         var responseJson = await response.Content.ReadAsStringAsync(ct);
-        using var doc = JsonDocument.Parse(responseJson);
-        var messageContent = doc.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+        try
+        {
+            using var doc = JsonDocument.Parse(responseJson);
+            var messageContent = doc.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
 
-        return messageContent ?? "[Empty response from OpenAI]";
+            return messageContent ?? "[Empty response from OpenAI]";
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or IndexOutOfRangeException or InvalidOperationException)
+        {
+            throw new AgentProviderException($"Unexpected OpenAI response format: {responseJson[..Math.Min(responseJson.Length, 500)]}");
+        }
     }
 
     public Task<IAsyncEnumerable<string>> StreamAsync(string prompt, string context, CancellationToken ct = default)

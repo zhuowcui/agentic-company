@@ -41,7 +41,7 @@ public class TasksController : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        return membership != null && membership.Role != NodeRole.Viewer;
     }
 
     [HttpGet("api/plans/{planId:guid}/tasks")]

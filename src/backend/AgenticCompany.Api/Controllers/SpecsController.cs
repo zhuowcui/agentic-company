@@ -29,10 +29,8 @@ public class SpecsController : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        return membership != null && membership.Role != NodeRole.Viewer;
     }
-
-    [HttpGet("api/nodes/{nodeId:guid}/specs")]
     public async Task<ActionResult<List<SpecResponse>>> GetByNode(Guid nodeId, CancellationToken ct)
     {
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
@@ -120,6 +118,9 @@ public class SpecsController : ControllerBase
     {
         var spec = await _specRepo.GetByIdAsync(id, ct);
         if (spec is null) return NotFound();
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         spec.Status = SpecStatus.Approved;
         await _specRepo.UpdateAsync(spec, ct);

@@ -28,7 +28,7 @@ public class PlansController : ControllerBase
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        return membership != null && membership.Role != NodeRole.Viewer;
     }
 
     [HttpGet("api/specs/{specId:guid}/plans")]

@@ -4,6 +4,7 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
+using AgenticCompany.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,12 +18,14 @@ public class NodesController : ControllerBase
     private readonly INodeRepository _nodeRepo;
     private readonly INodeMemberRepository _memberRepo;
     private readonly IUserRepository _userRepo;
+    private readonly AppDbContext _db;
 
-    public NodesController(INodeRepository nodeRepo, INodeMemberRepository memberRepo, IUserRepository userRepo)
+    public NodesController(INodeRepository nodeRepo, INodeMemberRepository memberRepo, IUserRepository userRepo, AppDbContext db)
     {
         _nodeRepo = nodeRepo;
         _memberRepo = memberRepo;
         _userRepo = userRepo;
+        _db = db;
     }
 
     private Guid GetUserId() =>
@@ -66,6 +69,10 @@ public class NodesController : ControllerBase
             var parent = await _nodeRepo.GetByIdAsync(request.ParentId.Value, ct);
             if (parent is null)
                 return BadRequest(new { error = $"Parent node {request.ParentId.Value} does not exist." });
+
+            var parentMembership = await _memberRepo.GetAsync(request.ParentId.Value, GetUserId(), ct);
+            if (parentMembership is null || parentMembership.Role == NodeRole.Viewer)
+                return Forbid();
         }
 
         var node = new Node
@@ -76,17 +83,28 @@ public class NodesController : ControllerBase
             ParentId = request.ParentId,
         };
 
-        var created = await _nodeRepo.CreateAsync(node, ct);
-
-        // Auto-create the caller as Owner of the new node
-        await _memberRepo.CreateAsync(new NodeMember
+        using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            NodeId = created.Id,
-            UserId = GetUserId(),
-            Role = NodeRole.Owner,
-        }, ct);
+            var created = await _nodeRepo.CreateAsync(node, ct);
 
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToResponse());
+            // Auto-create the caller as Owner of the new node
+            await _memberRepo.CreateAsync(new NodeMember
+            {
+                NodeId = created.Id,
+                UserId = GetUserId(),
+                Role = NodeRole.Owner,
+            }, ct);
+
+            await transaction.CommitAsync(ct);
+
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToResponse());
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 
     /// <summary>Update a node's name and description</summary>

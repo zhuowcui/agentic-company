@@ -49,13 +49,20 @@ public class ClaudeAgentProvider : IAgentProvider
         }
 
         var responseJson = await response.Content.ReadAsStringAsync(ct);
-        using var doc = JsonDocument.Parse(responseJson);
-        var textContent = doc.RootElement
-            .GetProperty("content")[0]
-            .GetProperty("text")
-            .GetString();
+        try
+        {
+            using var doc = JsonDocument.Parse(responseJson);
+            var textContent = doc.RootElement
+                .GetProperty("content")[0]
+                .GetProperty("text")
+                .GetString();
 
-        return textContent ?? "[Empty response from Claude]";
+            return textContent ?? "[Empty response from Claude]";
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or IndexOutOfRangeException or InvalidOperationException)
+        {
+            throw new AgentProviderException($"Unexpected Claude response format: {responseJson[..Math.Min(responseJson.Length, 500)]}");
+        }
     }
 
     public Task<IAsyncEnumerable<string>> StreamAsync(string prompt, string context, CancellationToken ct = default)
