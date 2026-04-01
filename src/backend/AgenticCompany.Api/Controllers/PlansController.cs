@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AgenticCompany.Api.Mapping;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
@@ -14,11 +15,20 @@ public class PlansController : ControllerBase
 {
     private readonly IPlanRepository _planRepo;
     private readonly ISpecRepository _specRepo;
+    private readonly INodeMemberRepository _memberRepo;
 
-    public PlansController(IPlanRepository planRepo, ISpecRepository specRepo)
+    public PlansController(IPlanRepository planRepo, ISpecRepository specRepo, INodeMemberRepository memberRepo)
     {
         _planRepo = planRepo;
         _specRepo = specRepo;
+        _memberRepo = memberRepo;
+    }
+
+    private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
     }
 
     [HttpGet("api/specs/{specId:guid}/plans")]
@@ -45,6 +55,9 @@ public class PlansController : ControllerBase
         var spec = await _specRepo.GetByIdAsync(specId, ct);
         if (spec is null) return NotFound("Spec not found");
 
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
+
         if (!Enum.TryParse<PlanType>(request.PlanType, true, out var planType))
             return BadRequest($"Invalid plan type. Valid values: {string.Join(", ", Enum.GetNames<PlanType>())}");
 
@@ -65,6 +78,12 @@ public class PlansController : ControllerBase
     {
         var plan = await _planRepo.GetByIdAsync(id, ct);
         if (plan is null) return NotFound();
+
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound("Spec not found");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         if (request.Content is not null)
             plan.Content = request.Content;

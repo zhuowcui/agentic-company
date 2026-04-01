@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AgenticCompany.Api.Mapping;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
@@ -17,6 +18,7 @@ public class TasksController : ControllerBase
     private readonly IPlanRepository _planRepo;
     private readonly ISpecRepository _specRepo;
     private readonly INodeRepository _nodeRepo;
+    private readonly INodeMemberRepository _memberRepo;
     private readonly AppDbContext _db;
 
     public TasksController(
@@ -24,13 +26,22 @@ public class TasksController : ControllerBase
         IPlanRepository planRepo,
         ISpecRepository specRepo,
         INodeRepository nodeRepo,
+        INodeMemberRepository memberRepo,
         AppDbContext db)
     {
         _taskRepo = taskRepo;
         _planRepo = planRepo;
         _specRepo = specRepo;
         _nodeRepo = nodeRepo;
+        _memberRepo = memberRepo;
         _db = db;
+    }
+
+    private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
     }
 
     [HttpGet("api/plans/{planId:guid}/tasks")]
@@ -57,6 +68,18 @@ public class TasksController : ControllerBase
         var plan = await _planRepo.GetByIdAsync(planId, ct);
         if (plan is null) return NotFound("Plan not found");
 
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound("Spec not found");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
+
+        if (request.TargetNodeId.HasValue)
+        {
+            var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId.Value, ct);
+            if (targetNode is null) return BadRequest("Target node not found.");
+        }
+
         var task = new TaskItem
         {
             PlanId = planId,
@@ -78,15 +101,33 @@ public class TasksController : ControllerBase
         var task = await _taskRepo.GetByIdAsync(id, ct);
         if (task is null) return NotFound();
 
+        var plan = await _planRepo.GetByIdAsync(task.PlanId, ct);
+        if (plan is null) return NotFound("Plan not found");
+
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound("Spec not found");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
+
         if (request.Title != null) task.Title = request.Title;
         if (request.Description != null) task.Description = request.Description;
         if (request.AssignedTo != null) task.AssignedTo = request.AssignedTo;
-        if (request.TargetNodeId.HasValue) task.TargetNodeId = request.TargetNodeId;
+        if (request.TargetNodeId.HasValue)
+        {
+            var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId.Value, ct);
+            if (targetNode is null) return BadRequest("Target node not found.");
+            task.TargetNodeId = request.TargetNodeId;
+        }
         if (request.Order.HasValue) task.Order = request.Order.Value;
         if (request.Status != null)
         {
             if (!Enum.TryParse<TaskItemStatus>(request.Status, true, out var status))
                 return BadRequest($"Invalid status '{request.Status}'. Valid values: {string.Join(", ", Enum.GetNames<TaskItemStatus>())}");
+            if (status == TaskItemStatus.Cascaded)
+                return BadRequest("Status 'Cascaded' can only be set via the cascade endpoint.");
+            if (task.Status == TaskItemStatus.Cascaded)
+                return BadRequest("Cannot change status of a cascaded task.");
             task.Status = status;
         }
 
@@ -122,6 +163,9 @@ public class TasksController : ControllerBase
         
         if (!targetNode.Path.StartsWith(sourceNode.Path + "."))
             return BadRequest("Target node must be a descendant of the spec's owning node");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try

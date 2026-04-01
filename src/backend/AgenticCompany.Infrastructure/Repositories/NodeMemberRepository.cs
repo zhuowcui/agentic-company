@@ -31,6 +31,7 @@ public class NodeMemberRepository : INodeMemberRepository
 
         _db.NodeMembers.Add(member);
         await _db.SaveChangesAsync(ct);
+        await _db.Entry(member).Reference(m => m.User).LoadAsync(ct);
         return member;
     }
 

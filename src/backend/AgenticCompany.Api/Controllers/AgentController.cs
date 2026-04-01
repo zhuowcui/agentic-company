@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
@@ -21,6 +22,7 @@ public class AgentController : ControllerBase
     private readonly IPlanRepository _planRepo;
     private readonly ITaskItemRepository _taskRepo;
     private readonly IPrincipleRepository _principleRepo;
+    private readonly INodeMemberRepository _memberRepo;
     private readonly PrincipleInheritanceService _principleService;
 
     public AgentController(
@@ -30,6 +32,7 @@ public class AgentController : ControllerBase
         IPlanRepository planRepo,
         ITaskItemRepository taskRepo,
         IPrincipleRepository principleRepo,
+        INodeMemberRepository memberRepo,
         PrincipleInheritanceService principleService,
         IConfiguration configuration)
     {
@@ -39,8 +42,16 @@ public class AgentController : ControllerBase
         _planRepo = planRepo;
         _taskRepo = taskRepo;
         _principleRepo = principleRepo;
+        _memberRepo = memberRepo;
         _principleService = principleService;
         _defaultProvider = configuration["Agent:DefaultProvider"] ?? "echo";
+    }
+
+    private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
     }
 
     /// <summary>Generate a draft spec body using AI</summary>
@@ -50,6 +61,9 @@ public class AgentController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(request.NodeId, ct);
         if (node is null) return NotFound("Node not found");
+
+        if (!await IsNodeMemberAsync(request.NodeId, ct))
+            return Forbid();
 
         var effectivePrinciples = await GetEffectivePrinciplesAsync(request.NodeId, ct);
         var principlesText = FormatPrinciples(effectivePrinciples);
@@ -92,6 +106,9 @@ public class AgentController : ControllerBase
 
         var node = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
         if (node is null) return NotFound("Node not found");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         var effectivePrinciples = await GetEffectivePrinciplesAsync(spec.NodeId, ct);
         var principlesText = FormatPrinciples(effectivePrinciples);
@@ -149,6 +166,9 @@ public class AgentController : ControllerBase
 
         var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
         if (spec is null) return NotFound("Spec not found");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         var node = await _nodeRepo.GetWithChildrenAsync(spec.NodeId, ct);
         if (node is null) return NotFound("Node not found");
@@ -212,6 +232,9 @@ public class AgentController : ControllerBase
 
         var node = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
         if (node is null) return NotFound("Node not found");
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         var effectivePrinciples = await GetEffectivePrinciplesAsync(spec.NodeId, ct);
         var principlesText = FormatPrinciples(effectivePrinciples);

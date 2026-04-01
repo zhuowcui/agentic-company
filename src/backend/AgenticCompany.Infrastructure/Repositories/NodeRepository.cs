@@ -52,11 +52,13 @@ public class NodeRepository : INodeRepository
         if (node == null) return [];
 
         var ancestors = new List<Node>();
+        var visited = new HashSet<Guid>();
         var currentId = node.ParentId;
         while (currentId.HasValue)
         {
             var parent = await _db.Nodes.FirstOrDefaultAsync(n => n.Id == currentId.Value, ct);
             if (parent == null) break;
+            if (!visited.Add(parent.Id)) break; // cycle detected
             ancestors.Insert(0, parent);
             currentId = parent.ParentId;
         }

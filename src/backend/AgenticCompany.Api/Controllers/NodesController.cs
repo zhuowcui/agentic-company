@@ -16,11 +16,13 @@ public class NodesController : ControllerBase
 {
     private readonly INodeRepository _nodeRepo;
     private readonly INodeMemberRepository _memberRepo;
+    private readonly IUserRepository _userRepo;
 
-    public NodesController(INodeRepository nodeRepo, INodeMemberRepository memberRepo)
+    public NodesController(INodeRepository nodeRepo, INodeMemberRepository memberRepo, IUserRepository userRepo)
     {
         _nodeRepo = nodeRepo;
         _memberRepo = memberRepo;
+        _userRepo = userRepo;
     }
 
     private Guid GetUserId() =>
@@ -133,12 +135,20 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
 
+        if (id == request.NewParentId)
+            return BadRequest("Cannot move a node under itself.");
+
         var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
         if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
             return Forbid();
 
         var newParent = await _nodeRepo.GetByIdAsync(request.NewParentId, ct);
         if (newParent is null) return BadRequest("New parent node not found");
+
+        // Issue 3: Check caller has membership on destination parent
+        var destMembership = await _memberRepo.GetAsync(request.NewParentId, GetUserId(), ct);
+        if (destMembership is null)
+            return Forbid();
 
         // Prevent moving a node under its own descendant
         var descendants = await _nodeRepo.GetDescendantsAsync(id, ct);
@@ -195,6 +205,10 @@ public class NodesController : ControllerBase
 
         if (!Enum.TryParse<NodeRole>(request.Role, true, out var role))
             return BadRequest($"Invalid role '{request.Role}'. Valid values: {string.Join(", ", Enum.GetNames<NodeRole>())}");
+
+        var user = await _userRepo.GetByIdAsync(request.UserId, ct);
+        if (user is null)
+            return BadRequest("User not found.");
 
         var existing = await _memberRepo.GetAsync(id, request.UserId, ct);
         if (existing is not null)

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AgenticCompany.Api.Mapping;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
@@ -15,11 +16,20 @@ public class SpecsController : ControllerBase
 {
     private readonly ISpecRepository _specRepo;
     private readonly INodeRepository _nodeRepo;
+    private readonly INodeMemberRepository _memberRepo;
 
-    public SpecsController(ISpecRepository specRepo, INodeRepository nodeRepo)
+    public SpecsController(ISpecRepository specRepo, INodeRepository nodeRepo, INodeMemberRepository memberRepo)
     {
         _specRepo = specRepo;
         _nodeRepo = nodeRepo;
+        _memberRepo = memberRepo;
+    }
+
+    private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
     }
 
     [HttpGet("api/nodes/{nodeId:guid}/specs")]
@@ -45,6 +55,9 @@ public class SpecsController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return NotFound("Node not found");
+
+        if (!await IsNodeMemberAsync(nodeId, ct))
+            return Forbid();
 
         var spec = new Spec
         {
@@ -74,6 +87,9 @@ public class SpecsController : ControllerBase
     {
         var spec = await _specRepo.GetByIdAsync(id, ct);
         if (spec is null) return NotFound();
+
+        if (!await IsNodeMemberAsync(spec.NodeId, ct))
+            return Forbid();
 
         if (request.Title is not null) spec.Title = request.Title;
 

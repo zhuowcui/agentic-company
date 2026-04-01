@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AgenticCompany.Api.Mapping;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
@@ -15,16 +16,26 @@ public class PrinciplesController : ControllerBase
 {
     private readonly IPrincipleRepository _principleRepo;
     private readonly INodeRepository _nodeRepo;
+    private readonly INodeMemberRepository _memberRepo;
     private readonly PrincipleInheritanceService _inheritanceService;
 
     public PrinciplesController(
         IPrincipleRepository principleRepo,
         INodeRepository nodeRepo,
+        INodeMemberRepository memberRepo,
         PrincipleInheritanceService inheritanceService)
     {
         _principleRepo = principleRepo;
         _nodeRepo = nodeRepo;
+        _memberRepo = memberRepo;
         _inheritanceService = inheritanceService;
+    }
+
+    private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
     }
 
     /// <summary>Get local principles for a node</summary>
@@ -68,6 +79,9 @@ public class PrinciplesController : ControllerBase
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return NotFound("Node not found");
 
+        if (!await IsNodeMemberAsync(nodeId, ct))
+            return Forbid();
+
         if (string.IsNullOrWhiteSpace(request.Title))
             return BadRequest("Title is required");
         if (string.IsNullOrWhiteSpace(request.Content))
@@ -90,6 +104,9 @@ public class PrinciplesController : ControllerBase
     [HttpPut("{principleId:guid}")]
     public async Task<ActionResult<PrincipleResponse>> Update(Guid nodeId, Guid principleId, [FromBody] UpdatePrincipleRequest request, CancellationToken ct)
     {
+        if (!await IsNodeMemberAsync(nodeId, ct))
+            return Forbid();
+
         var principles = await _principleRepo.GetByNodeIdAsync(nodeId, ct);
         var principle = principles.FirstOrDefault(p => p.Id == principleId);
         if (principle is null) return NotFound("Principle not found");
@@ -112,6 +129,9 @@ public class PrinciplesController : ControllerBase
     [HttpDelete("{principleId:guid}")]
     public async Task<IActionResult> Delete(Guid nodeId, Guid principleId, CancellationToken ct)
     {
+        if (!await IsNodeMemberAsync(nodeId, ct))
+            return Forbid();
+
         var principles = await _principleRepo.GetByNodeIdAsync(nodeId, ct);
         var principle = principles.FirstOrDefault(p => p.Id == principleId);
         if (principle is null) return NotFound("Principle not found");

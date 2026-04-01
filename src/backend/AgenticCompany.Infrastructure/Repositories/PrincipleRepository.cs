@@ -23,9 +23,11 @@ public class PrincipleRepository : IPrincipleRepository
         if (node == null) return [];
 
         var nodeIds = new List<Guid> { nodeId };
+        var visited = new HashSet<Guid> { nodeId };
         var currentId = node.ParentId;
         while (currentId.HasValue)
         {
+            if (!visited.Add(currentId.Value)) break; // cycle detected
             nodeIds.Add(currentId.Value);
             var parent = await _db.Nodes.FirstOrDefaultAsync(n => n.Id == currentId.Value, ct);
             if (parent == null) break;
