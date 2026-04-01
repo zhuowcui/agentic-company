@@ -46,7 +46,10 @@ public class PrinciplesController : ControllerBase
         if (node is null) return false;
         var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
-        return memberships.Any(m => ancestorIds.Contains(m.NodeId));
+        if (memberships.Any(m => ancestorIds.Contains(m.NodeId)))
+            return true;
+        var nodePathPrefix = node.Path + ".";
+        return memberships.Any(m => m.Node.Path.StartsWith(nodePathPrefix));
     }
 
     /// <summary>Get local principles for a node</summary>

@@ -40,10 +40,12 @@ public class SpecsController : ControllerBase
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return false;
-        // Read access inherits downward: check membership on node or any ancestor
         var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
-        return memberships.Any(m => ancestorIds.Contains(m.NodeId));
+        if (memberships.Any(m => ancestorIds.Contains(m.NodeId)))
+            return true;
+        var nodePathPrefix = node.Path + ".";
+        return memberships.Any(m => m.Node.Path.StartsWith(nodePathPrefix));
     }
 
     [HttpGet("api/nodes/{nodeId:guid}/specs")]

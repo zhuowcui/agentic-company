@@ -52,7 +52,10 @@ public class TasksController : ControllerBase
         if (node is null) return false;
         var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
-        return memberships.Any(m => ancestorIds.Contains(m.NodeId));
+        if (memberships.Any(m => ancestorIds.Contains(m.NodeId)))
+            return true;
+        var nodePathPrefix = node.Path + ".";
+        return memberships.Any(m => m.Node.Path.StartsWith(nodePathPrefix));
     }
 
     [HttpGet("api/plans/{planId:guid}/tasks")]
@@ -107,6 +110,9 @@ public class TasksController : ControllerBase
             if (targetNode is null) return BadRequest("Target node not found.");
             if (!await IsNodeMemberAsync(request.TargetNodeId.Value, ct))
                 return Forbid();
+            var sourceNode = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
+            if (sourceNode is not null && !targetNode.Path.StartsWith(sourceNode.Path + "."))
+                return BadRequest("Target node must be a descendant of the spec's owning node.");
         }
 
         var task = new TaskItem
@@ -155,6 +161,9 @@ public class TasksController : ControllerBase
             if (targetNode is null) return BadRequest("Target node not found.");
             if (!await IsNodeMemberAsync(request.TargetNodeId.Value, ct))
                 return Forbid();
+            var sourceNode = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
+            if (sourceNode is not null && !targetNode.Path.StartsWith(sourceNode.Path + "."))
+                return BadRequest("Target node must be a descendant of the spec's owning node.");
             task.TargetNodeId = request.TargetNodeId;
         }
         if (request.Order.HasValue) task.Order = request.Order.Value;

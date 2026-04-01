@@ -7,6 +7,7 @@ using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgenticCompany.Api.Controllers;
 
@@ -32,8 +33,8 @@ public class NodesController : ControllerBase
         Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     /// <summary>
-    /// Check read access with downward inheritance: user can read a node if they
-    /// have membership on that node OR any ancestor in its path.
+    /// Check read access with bidirectional inheritance: user can read a node if they
+    /// have membership on that node, any ancestor, OR any descendant (for tree navigation).
     /// </summary>
     private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
     {
@@ -46,11 +47,16 @@ public class NodesController : ControllerBase
     private async Task<bool> HasReadAccessByPathAsync(string nodePath, CancellationToken ct)
     {
         var userId = GetUserId();
-        // Parse the materialized path to get all ancestor IDs + self
-        var ancestorIds = nodePath.Split('.').Select(Guid.Parse).ToList();
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
-        var memberNodeIds = memberships.Select(m => m.NodeId).ToHashSet();
-        return ancestorIds.Any(id => memberNodeIds.Contains(id));
+
+        // Check 1: membership on self or any ancestor (downward inheritance)
+        var ancestorIds = nodePath.Split('.').Select(Guid.Parse).ToHashSet();
+        if (memberships.Any(m => ancestorIds.Contains(m.NodeId)))
+            return true;
+
+        // Check 2: membership on any descendant (upward navigation — allows viewing ancestor tree)
+        var nodePathPrefix = nodePath + ".";
+        return memberships.Any(m => m.Node.Path.StartsWith(nodePathPrefix));
     }
 
     /// <summary>List root nodes accessible to the caller</summary>
@@ -292,12 +298,20 @@ public class NodesController : ControllerBase
         if (existing is not null)
             return Conflict("User is already a member of this node.");
 
-        var member = await _memberRepo.CreateAsync(new NodeMember
+        NodeMember member;
+        try
         {
-            NodeId = id,
-            UserId = request.UserId,
-            Role = role,
-        }, ct);
+            member = await _memberRepo.CreateAsync(new NodeMember
+            {
+                NodeId = id,
+                UserId = request.UserId,
+                Role = role,
+            }, ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict("User is already a member of this node.");
+        }
 
         return Created($"/api/nodes/{id}/members", new NodeMemberResponse(
             member.UserId, member.User?.Email ?? "", member.User?.DisplayName ?? "", member.Role.ToString(), member.JoinedAt));
@@ -321,14 +335,21 @@ public class NodesController : ControllerBase
         if (callerMembership.Role == NodeRole.Admin && target.Role == NodeRole.Owner)
             return BadRequest("Admins cannot remove Owners.");
 
-        // Prevent removing the last Owner — wrapped in transaction to avoid race
+        // Prevent removing the last Owner — use FOR UPDATE lock to prevent write skew
         if (target.Role == NodeRole.Owner)
         {
             using var transaction = await _db.Database.BeginTransactionAsync(ct);
             try
             {
-                var members = await _memberRepo.GetByNodeIdAsync(nodeId, ct);
-                var ownerCount = members.Count(m => m.Role == NodeRole.Owner);
+                // Lock all owner membership rows for this node to prevent concurrent removal
+                var ownerCount = await _db.Database
+                    .SqlQuery<int>($"""
+                        SELECT COUNT(*)::int AS "Value" FROM "NodeMembers"
+                        WHERE "NodeId" = {nodeId} AND "Role" = 'Owner'
+                        FOR UPDATE
+                        """)
+                    .FirstAsync(ct);
+
                 if (ownerCount <= 1)
                     return BadRequest("Cannot remove the last Owner of a node.");
 
