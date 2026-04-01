@@ -97,7 +97,7 @@ public class NodesController : ControllerBase
         return Ok(node.ToResponse());
     }
 
-    /// <summary>Get node with full subtree</summary>
+    /// <summary>Get node with subtree filtered to branches the caller can access</summary>
     [HttpGet("{id:guid}/tree")]
     public async Task<ActionResult<NodeResponse>> GetTree(Guid id, CancellationToken ct)
     {
@@ -107,7 +107,52 @@ public class NodesController : ControllerBase
         if (!await HasReadAccessByPathAsync(node.Path, ct))
             return Forbid();
 
-        return Ok(node.ToResponse(includeChildren: true));
+        // If user has direct/ancestor membership, they see the full subtree
+        var userId = GetUserId();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
+        if (memberships.Any(m => ancestorIds.Contains(m.NodeId)))
+            return Ok(node.ToResponse(includeChildren: true));
+
+        // Descendant-only access: filter tree to only include branches containing user's memberships
+        var memberNodePaths = memberships.Select(m => m.Node.Path).ToList();
+        return Ok(FilterTreeToAccessibleBranches(node, memberNodePaths));
+    }
+
+    /// <summary>
+    /// Recursively filter a node tree to only include branches that lead to accessible nodes.
+    /// A child branch is included if any user membership path passes through it.
+    /// </summary>
+    private static NodeResponse FilterTreeToAccessibleBranches(Node node, List<string> memberPaths)
+    {
+        var nodePathPrefix = node.Path + ".";
+        var accessibleChildren = new List<NodeResponse>();
+
+        if (node.Children is not null)
+        {
+            foreach (var child in node.Children)
+            {
+                var childPathPrefix = child.Path + ".";
+                // Include child if any membership is on or under this child
+                if (memberPaths.Any(mp => mp == child.Path || mp.StartsWith(childPathPrefix)))
+                {
+                    accessibleChildren.Add(FilterTreeToAccessibleBranches(child, memberPaths));
+                }
+            }
+        }
+
+        return new NodeResponse(
+            Id: node.Id,
+            ParentId: node.ParentId,
+            Name: node.Name,
+            Type: node.Type.ToString(),
+            Description: node.Description,
+            Path: node.Path,
+            Depth: node.Depth,
+            CreatedAt: node.CreatedAt,
+            UpdatedAt: node.UpdatedAt,
+            Children: accessibleChildren
+        );
     }
 
     /// <summary>Create a new node</summary>
@@ -209,8 +254,17 @@ public class NodesController : ControllerBase
         using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
         {
+            // Lock the node being moved first
+            await _db.Database.ExecuteSqlAsync(
+                $"""SELECT "Id" FROM "Nodes" WHERE "Id" = {id} FOR UPDATE""", ct);
+
             var node = await _nodeRepo.GetByIdAsync(id, ct);
             if (node is null) return NotFound();
+
+            // Now lock all descendants using the node's actual path
+            var pathPrefix = node.Path + ".%";
+            await _db.Database.ExecuteSqlAsync(
+                $"""SELECT "Id" FROM "Nodes" WHERE "Path" LIKE {pathPrefix} FOR UPDATE""", ct);
 
             var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
             if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
@@ -257,14 +311,18 @@ public class NodesController : ControllerBase
         }
     }
 
-    /// <summary>List members of a node</summary>
+    /// <summary>List members of a node — requires direct or ancestor membership (not descendant-only)</summary>
     [HttpGet("{id:guid}/members")]
     public async Task<ActionResult<List<NodeMemberResponse>>> GetMembers(Guid id, CancellationToken ct)
     {
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
 
-        if (!await HasReadAccessByPathAsync(node.Path, ct))
+        // Stricter check: only direct/ancestor membership can view member PII
+        var userId = GetUserId();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
+        if (!memberships.Any(m => ancestorIds.Contains(m.NodeId)))
             return Forbid();
 
         var members = await _memberRepo.GetByNodeIdAsync(id, ct);
