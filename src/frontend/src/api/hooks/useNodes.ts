@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { nodeApi } from '../nodes';
+import { dashboardKeys } from './useDashboard';
 import type { CreateNode } from '../schemas/node';
 
 export const nodeKeys = {
@@ -38,6 +39,7 @@ export function useCreateNode() {
     mutationFn: (data: CreateNode) => nodeApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: nodeKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -48,6 +50,7 @@ export function useDeleteNode() {
     mutationFn: (id: string) => nodeApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: nodeKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }

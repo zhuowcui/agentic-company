@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { taskApi } from '../tasks';
+import { specKeys } from './useSpecs';
+import { dashboardKeys } from './useDashboard';
 import type { CreateTaskData, UpdateTaskData } from '../tasks';
 
 export const taskKeys = {
@@ -31,6 +33,7 @@ export function useCreateTask() {
       taskApi.create(planId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -42,6 +45,7 @@ export function useUpdateTask() {
       taskApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -53,6 +57,8 @@ export function useCascadeTask() {
       taskApi.cascade(id, targetNodeId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      queryClient.invalidateQueries({ queryKey: specKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }

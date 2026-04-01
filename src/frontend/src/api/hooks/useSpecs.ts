@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { specApi } from '../specs';
+import { dashboardKeys } from './useDashboard';
 import type { CreateSpecData, UpdateSpecData } from '../specs';
 
 export const specKeys = {
@@ -31,6 +32,7 @@ export function useCreateSpec() {
       specApi.create(nodeId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: specKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -42,6 +44,7 @@ export function useUpdateSpec() {
       specApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: specKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }

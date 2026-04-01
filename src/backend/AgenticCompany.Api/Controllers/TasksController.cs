@@ -157,7 +157,7 @@ public class TasksController : ControllerBase
                 return BadRequest($"Invalid status '{request.Status}'. Valid values: {string.Join(", ", Enum.GetNames<TaskItemStatus>())}");
             if (status == TaskItemStatus.Cascaded)
                 return BadRequest("Status 'Cascaded' can only be set via the cascade endpoint.");
-            if (task.Status == TaskItemStatus.Cascaded)
+            if (task.Status == TaskItemStatus.Cascaded && task.SpawnedSpecId.HasValue)
                 return BadRequest("Cannot change status of a cascaded task.");
             task.Status = status;
         }

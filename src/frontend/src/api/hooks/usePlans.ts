@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { planApi } from '../plans';
+import { dashboardKeys } from './useDashboard';
 import type { CreatePlanData, UpdatePlanData } from '../plans';
 
 export const planKeys = {
@@ -31,6 +32,7 @@ export function useCreatePlan() {
       planApi.create(specId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
@@ -42,6 +44,7 @@ export function useUpdatePlan() {
       planApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },
   });
 }
