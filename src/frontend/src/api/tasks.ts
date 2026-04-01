@@ -5,9 +5,8 @@ import type { Spec } from './schemas/spec';
 export interface CreateTaskData {
   title: string;
   description?: string;
-  assignedTo?: string;
+  order: number;
   targetNodeId?: string;
-  order?: number;
 }
 
 export interface UpdateTaskData {
@@ -15,8 +14,6 @@ export interface UpdateTaskData {
   description?: string;
   status?: string;
   assignedTo?: string;
-  targetNodeId?: string;
-  order?: number;
 }
 
 export interface CascadeResult {

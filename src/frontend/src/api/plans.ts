@@ -2,13 +2,12 @@ import { apiFetch } from './client';
 import type { Plan } from './schemas/plan';
 
 export interface CreatePlanData {
-  title: string;
-  description?: string;
+  content: string;
+  planType: string;
 }
 
 export interface UpdatePlanData {
-  title?: string;
-  description?: string;
+  content?: string;
   status?: string;
 }
 

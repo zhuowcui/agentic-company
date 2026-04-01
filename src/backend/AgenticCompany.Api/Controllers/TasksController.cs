@@ -58,6 +58,7 @@ public class TasksController : ControllerBase
             PlanId = planId,
             Title = request.Title,
             Description = request.Description,
+            AssignedTo = request.AssignedTo,
             Order = request.Order,
             TargetNodeId = request.TargetNodeId,
             Status = TaskItemStatus.Pending,
@@ -76,6 +77,8 @@ public class TasksController : ControllerBase
         if (request.Title != null) task.Title = request.Title;
         if (request.Description != null) task.Description = request.Description;
         if (request.AssignedTo != null) task.AssignedTo = request.AssignedTo;
+        if (request.TargetNodeId.HasValue) task.TargetNodeId = request.TargetNodeId;
+        if (request.Order.HasValue) task.Order = request.Order.Value;
         if (request.Status != null && Enum.TryParse<TaskItemStatus>(request.Status, true, out var status))
             task.Status = status;
 
@@ -88,24 +91,24 @@ public class TasksController : ControllerBase
     /// linked back to this task. This is the core multi-layer feature.
     /// </summary>
     [HttpPost("api/tasks/{id:guid}/cascade")]
-    public async Task<ActionResult<SpecResponse>> Cascade(Guid id, CancellationToken ct)
+    public async Task<ActionResult<CascadeResponse>> Cascade(Guid id, [FromBody] CascadeRequest request, CancellationToken ct)
     {
         var task = await _taskRepo.GetByIdAsync(id, ct);
         if (task is null) return NotFound("Task not found");
 
-        if (!task.TargetNodeId.HasValue)
-            return BadRequest("Task has no target node. Set targetNodeId first.");
-
         if (task.SpawnedSpecId.HasValue)
             return BadRequest("Task has already been cascaded.");
 
-        var targetNode = await _nodeRepo.GetByIdAsync(task.TargetNodeId.Value, ct);
+        var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId, ct);
         if (targetNode is null) return BadRequest("Target node not found");
+
+        // Update the task's TargetNodeId to the value from the request
+        task.TargetNodeId = request.TargetNodeId;
 
         // Create a new spec on the target node from this task
         var spec = new Spec
         {
-            NodeId = task.TargetNodeId.Value,
+            NodeId = request.TargetNodeId,
             Title = task.Title,
             Status = SpecStatus.Draft,
             SourceTaskId = task.Id,
@@ -129,6 +132,6 @@ public class TasksController : ControllerBase
         task.Status = TaskItemStatus.Cascaded;
         await _taskRepo.UpdateAsync(task, ct);
 
-        return Created($"/api/specs/{createdSpec.Id}", createdSpec.ToResponse(includeVersions: true));
+        return Created($"/api/specs/{createdSpec.Id}", new CascadeResponse(task.ToResponse(), createdSpec.ToResponse(includeVersions: true)));
     }
 }

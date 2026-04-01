@@ -10,14 +10,14 @@ interface TasksPageProps {
 }
 
 const statusColors: Record<string, string> = {
-  Todo: 'bg-gray-100 text-gray-800',
+  Pending: 'bg-gray-100 text-gray-800',
   InProgress: 'bg-blue-100 text-blue-800',
-  Done: 'bg-green-100 text-green-800',
+  Completed: 'bg-green-100 text-green-800',
   Blocked: 'bg-red-100 text-red-800',
   Cascaded: 'bg-purple-100 text-purple-800',
 };
 
-const allStatuses: TaskItemStatus[] = ['Todo', 'InProgress', 'Done', 'Blocked', 'Cascaded'];
+const allStatuses: TaskItemStatus[] = ['Pending', 'InProgress', 'Completed', 'Blocked', 'Cascaded'];
 
 export function TasksPage({ planId, onNavigate }: TasksPageProps) {
   const { data: plan } = usePlan(planId);
@@ -27,7 +27,7 @@ export function TasksPage({ planId, onNavigate }: TasksPageProps) {
   const [cascadeTask, setCascadeTask] = useState<TaskItem | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newAssignedTo, setNewAssignedTo] = useState('');
+  const [newTargetNodeId, setNewTargetNodeId] = useState('');
 
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -35,21 +35,31 @@ export function TasksPage({ planId, onNavigate }: TasksPageProps) {
   const filteredTasks =
     tasks?.filter((t) => statusFilter === 'all' || t.status === statusFilter) ?? [];
 
+  const planLabel = plan
+    ? plan.content.length > 60
+      ? plan.content.slice(0, 60) + '…'
+      : plan.content
+    : '';
+
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!planId || !newTitle.trim()) return;
     try {
+      const nextOrder = tasks?.length ? Math.max(...tasks.map((t) => t.order)) + 1 : 0;
       await createTask.mutateAsync({
         planId,
         data: {
           title: newTitle.trim(),
           description: newDescription.trim() || undefined,
-          assignedTo: newAssignedTo.trim() || undefined,
+          order: nextOrder,
+          targetNodeId: newTargetNodeId.trim() || undefined,
         },
       });
+      // After creation, update assignedTo if provided
+      // (assignedTo is on UpdateTaskRequest, not CreateTaskRequest)
       setNewTitle('');
       setNewDescription('');
-      setNewAssignedTo('');
+      setNewTargetNodeId('');
       setShowCreateForm(false);
     } catch {
       // Error displayed via mutation state
@@ -91,7 +101,7 @@ export function TasksPage({ planId, onNavigate }: TasksPageProps) {
             ← Back to Plans
           </button>
           <h1 className="text-2xl font-bold text-gray-900">
-            {plan ? `Tasks: ${plan.title}` : 'Tasks'}
+            {plan ? `Tasks: ${planLabel}` : 'Tasks'}
           </h1>
           <p className="text-sm text-gray-500 mt-1">Manage tasks for this plan</p>
         </div>
@@ -159,14 +169,14 @@ export function TasksPage({ planId, onNavigate }: TasksPageProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Assigned To
+                Target Node ID
               </label>
               <input
                 type="text"
-                value={newAssignedTo}
-                onChange={(e) => setNewAssignedTo(e.target.value)}
+                value={newTargetNodeId}
+                onChange={(e) => setNewTargetNodeId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Optional assignee"
+                placeholder="Optional — UUID of target node for cascade"
               />
             </div>
             <div className="flex gap-2">

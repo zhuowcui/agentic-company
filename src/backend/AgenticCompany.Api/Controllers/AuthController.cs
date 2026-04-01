@@ -19,6 +19,7 @@ public class AuthController : ControllerBase
 {
     private const string DevFallbackKey = "agentic-company-dev-signing-key-min-32-chars!";
     private static readonly PasswordHasher<User> _passwordHasher = new();
+    private static readonly string _dummyHash = _passwordHasher.HashPassword(null!, "dummy-password-for-timing");
 
     private readonly IUserRepository _users;
     private readonly IConfiguration _configuration;
@@ -60,12 +61,14 @@ public class AuthController : ControllerBase
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
-        var user = await _users.GetByEmailAsync(request.Email.Trim().ToLowerInvariant());
-        if (user is null)
-            return Unauthorized(new { message = "Invalid email or password" });
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = await _users.GetByEmailAsync(normalizedEmail);
 
-        var result = _passwordHasher.VerifyHashedPassword(null!, user.PasswordHash, request.Password);
-        if (result == PasswordVerificationResult.Failed)
+        // Always perform hash verification to prevent timing-based email enumeration
+        var hashToVerify = user?.PasswordHash ?? _dummyHash;
+        var result = _passwordHasher.VerifyHashedPassword(null!, hashToVerify, request.Password);
+
+        if (user is null || result == PasswordVerificationResult.Failed)
             return Unauthorized(new { message = "Invalid email or password" });
 
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
