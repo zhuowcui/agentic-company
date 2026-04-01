@@ -77,13 +77,15 @@ public class PrinciplesController : ControllerBase
         var ancestors = await _nodeRepo.GetAncestorsAsync(nodeId, ct);
         ancestors.Add(node);
 
-        // Collect principles per ancestor node
-        var ancestorPrinciples = new List<(Guid NodeId, List<Principle> Principles)>();
-        foreach (var ancestor in ancestors)
-        {
-            var principles = await _principleRepo.GetByNodeIdAsync(ancestor.Id, ct);
-            ancestorPrinciples.Add((ancestor.Id, principles));
-        }
+        // Batch-load all principles for the ancestor chain in one query
+        var allNodeIds = ancestors.Select(a => a.Id).ToList();
+        var allPrinciples = await _principleRepo.GetByNodeIdsAsync(allNodeIds, ct);
+        var principlesByNode = allPrinciples.GroupBy(p => p.NodeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var ancestorPrinciples = ancestors
+            .Select(a => (a.Id, principlesByNode.GetValueOrDefault(a.Id, [])))
+            .ToList();
 
         var effective = _inheritanceService.ResolveEffective(ancestorPrinciples, nodeId);
         return Ok(effective.Select(e => e.ToResponse()).ToList());

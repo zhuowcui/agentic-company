@@ -321,13 +321,26 @@ public class NodesController : ControllerBase
         if (callerMembership.Role == NodeRole.Admin && target.Role == NodeRole.Owner)
             return BadRequest("Admins cannot remove Owners.");
 
-        // Prevent removing the last Owner
+        // Prevent removing the last Owner — wrapped in transaction to avoid race
         if (target.Role == NodeRole.Owner)
         {
-            var members = await _memberRepo.GetByNodeIdAsync(nodeId, ct);
-            var ownerCount = members.Count(m => m.Role == NodeRole.Owner);
-            if (ownerCount <= 1)
-                return BadRequest("Cannot remove the last Owner of a node.");
+            using var transaction = await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                var members = await _memberRepo.GetByNodeIdAsync(nodeId, ct);
+                var ownerCount = members.Count(m => m.Role == NodeRole.Owner);
+                if (ownerCount <= 1)
+                    return BadRequest("Cannot remove the last Owner of a node.");
+
+                await _memberRepo.DeleteAsync(nodeId, userId, ct);
+                await transaction.CommitAsync(ct);
+                return NoContent();
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
         }
 
         await _memberRepo.DeleteAsync(nodeId, userId, ct);

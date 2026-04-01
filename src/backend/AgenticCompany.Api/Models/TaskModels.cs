@@ -15,7 +15,9 @@ public record UpdateTaskRequest(
     string? Status,
     [property: MaxLength(200)] string? AssignedTo,
     Guid? TargetNodeId,
-    int? Order);
+    int? Order,
+    bool ClearAssignedTo = false,
+    bool ClearTargetNodeId = false);
 
 public record CascadeRequest(Guid TargetNodeId);
 public record CascadeResponse(TaskItemResponse Task, SpecResponse SpawnedSpec);

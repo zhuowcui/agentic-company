@@ -141,8 +141,15 @@ public class TasksController : ControllerBase
 
         if (request.Title != null) task.Title = request.Title;
         if (request.Description != null) task.Description = request.Description;
-        if (request.AssignedTo != null) task.AssignedTo = request.AssignedTo;
-        if (request.TargetNodeId.HasValue)
+        if (request.ClearAssignedTo)
+            task.AssignedTo = null;
+        else if (request.AssignedTo != null)
+            task.AssignedTo = request.AssignedTo;
+        if (request.ClearTargetNodeId)
+        {
+            task.TargetNodeId = null;
+        }
+        else if (request.TargetNodeId.HasValue)
         {
             var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId.Value, ct);
             if (targetNode is null) return BadRequest("Target node not found.");

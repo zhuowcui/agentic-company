@@ -40,7 +40,15 @@ public class OpenAiAgentProvider : IAgentProvider
         var json = JsonSerializer.Serialize(request, JsonOptions);
         using var httpRequest = CreateHttpRequest(json);
 
-        var response = await _http.SendAsync(httpRequest, ct);
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(httpRequest, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            throw new AgentProviderException($"OpenAI provider communication error: {ex.GetType().Name}", ex);
+        }
 
         if (!response.IsSuccessStatusCode)
         {

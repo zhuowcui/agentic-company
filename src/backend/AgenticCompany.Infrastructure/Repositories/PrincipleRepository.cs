@@ -17,6 +17,16 @@ public class PrincipleRepository : IPrincipleRepository
             .OrderBy(p => p.Order)
             .ToListAsync(ct);
 
+    public async Task<List<Principle>> GetByNodeIdsAsync(IEnumerable<Guid> nodeIds, CancellationToken ct = default)
+    {
+        var idList = nodeIds.ToList();
+        if (idList.Count == 0) return [];
+        return await _db.Principles
+            .Where(p => idList.Contains(p.NodeId))
+            .OrderBy(p => p.Order)
+            .ToListAsync(ct);
+    }
+
     public async Task<List<Principle>> GetEffectiveAsync(Guid nodeId, CancellationToken ct = default)
     {
         var node = await _db.Nodes.FirstOrDefaultAsync(n => n.Id == nodeId, ct);

@@ -3,6 +3,7 @@ namespace AgenticCompany.Core.Interfaces;
 public class AgentProviderException : Exception
 {
     public AgentProviderException(string message) : base(message) { }
+    public AgentProviderException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 public interface IAgentProvider

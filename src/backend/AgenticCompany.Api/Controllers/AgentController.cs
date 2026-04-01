@@ -302,12 +302,15 @@ public class AgentController : ControllerBase
         if (node is not null && !allNodes.Any(n => n.Id == nodeId))
             allNodes.Add(node);
 
-        var ancestorPrinciples = new List<(Guid NodeId, List<Principle> Principles)>();
-        foreach (var n in allNodes)
-        {
-            var principles = await _principleRepo.GetByNodeIdAsync(n.Id, ct);
-            ancestorPrinciples.Add((n.Id, principles));
-        }
+        // Batch-load all principles in one query instead of N+1
+        var allNodeIds = allNodes.Select(n => n.Id).ToList();
+        var allPrinciples = await _principleRepo.GetByNodeIdsAsync(allNodeIds, ct);
+        var principlesByNode = allPrinciples.GroupBy(p => p.NodeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var ancestorPrinciples = allNodes
+            .Select(n => (n.Id, principlesByNode.GetValueOrDefault(n.Id, [])))
+            .ToList();
 
         return _principleService.ResolveEffective(ancestorPrinciples, nodeId);
     }
