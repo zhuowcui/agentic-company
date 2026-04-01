@@ -31,12 +31,18 @@ public class SpecsController : ControllerBase
     private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        // Write access inherits downward: check membership on node or any ancestor
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return false;
-        var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
+        var pathSegments = node.Path.Split('.');
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
-        return memberships.Any(m => ancestorIds.Contains(m.NodeId) && m.Role != NodeRole.Viewer);
+        var byNodeId = memberships.ToDictionary(m => m.NodeId);
+        // Most specific (deepest) membership wins
+        for (int i = pathSegments.Length - 1; i >= 0; i--)
+        {
+            if (Guid.TryParse(pathSegments[i], out var segId) && byNodeId.TryGetValue(segId, out var m))
+                return m.Role != NodeRole.Viewer;
+        }
+        return false;
     }
 
     private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)

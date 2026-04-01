@@ -47,11 +47,16 @@ public class NodesController : ControllerBase
     {
         var userId = GetUserId();
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
-        var ancestorIds = nodePath.Split('.').Select(Guid.Parse).ToHashSet();
-        var ancestorMemberships = memberships.Where(m => ancestorIds.Contains(m.NodeId)).ToList();
-        if (!ancestorMemberships.Any()) return null;
-        // Return best (lowest enum value = highest privilege): Owner=0, Admin=1, Member=2, Viewer=3
-        return ancestorMemberships.Min(m => m.Role);
+        // Path segments ordered root→leaf; prefer the most specific (deepest) membership
+        var pathSegments = nodePath.Split('.');
+        var membershipByNodeId = memberships.ToDictionary(m => m.NodeId);
+        // Walk from the target node (deepest) up to root; return first match
+        for (int i = pathSegments.Length - 1; i >= 0; i--)
+        {
+            if (Guid.TryParse(pathSegments[i], out var segId) && membershipByNodeId.TryGetValue(segId, out var m))
+                return m.Role;
+        }
+        return null;
     }
 
     /// <summary>
