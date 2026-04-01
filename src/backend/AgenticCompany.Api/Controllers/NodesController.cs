@@ -33,6 +33,28 @@ public class NodesController : ControllerBase
         Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     /// <summary>
+    /// Get the caller's effective role on a node, inheriting from ancestors.
+    /// Returns the highest-privilege role found on the node or any ancestor, or null if no membership.
+    /// </summary>
+    private async Task<NodeRole?> GetInheritedRoleAsync(Guid nodeId, CancellationToken ct)
+    {
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return null;
+        return await GetInheritedRoleByPathAsync(node.Path, ct);
+    }
+
+    private async Task<NodeRole?> GetInheritedRoleByPathAsync(string nodePath, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        var ancestorIds = nodePath.Split('.').Select(Guid.Parse).ToHashSet();
+        var ancestorMemberships = memberships.Where(m => ancestorIds.Contains(m.NodeId)).ToList();
+        if (!ancestorMemberships.Any()) return null;
+        // Return best (lowest enum value = highest privilege): Owner=0, Admin=1, Member=2, Viewer=3
+        return ancestorMemberships.Min(m => m.Role);
+    }
+
+    /// <summary>
     /// Check read access with bidirectional inheritance: user can read a node if they
     /// have membership on that node, any ancestor, OR any descendant (for tree navigation).
     /// </summary>
@@ -168,8 +190,8 @@ public class NodesController : ControllerBase
             if (parent is null)
                 return BadRequest(new { error = $"Parent node {request.ParentId.Value} does not exist." });
 
-            var parentMembership = await _memberRepo.GetAsync(request.ParentId.Value, GetUserId(), ct);
-            if (parentMembership is null || parentMembership.Role == NodeRole.Viewer)
+            var callerRole = await GetInheritedRoleByPathAsync(parent.Path, ct);
+            if (callerRole is null || callerRole == NodeRole.Viewer)
                 return Forbid();
         }
 
@@ -212,8 +234,8 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
 
-        var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
-        if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
+        var callerRole = await GetInheritedRoleByPathAsync(node.Path, ct);
+        if (callerRole is null || (callerRole != NodeRole.Owner && callerRole != NodeRole.Admin))
             return Forbid();
 
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -233,8 +255,8 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetWithChildrenAsync(id, ct);
         if (node is null) return NotFound();
 
-        var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
-        if (membership is null || membership.Role != NodeRole.Owner)
+        var callerRole = await GetInheritedRoleAsync(id, ct);
+        if (callerRole is null || callerRole != NodeRole.Owner)
             return Forbid();
 
         if (node.Children.Any())
@@ -266,8 +288,8 @@ public class NodesController : ControllerBase
             await _db.Database.ExecuteSqlAsync(
                 $"""SELECT "Id" FROM "Nodes" WHERE "Path" LIKE {pathPrefix} FOR UPDATE""", ct);
 
-            var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
-            if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
+            var sourceRole = await GetInheritedRoleByPathAsync(node.Path, ct);
+            if (sourceRole is null || (sourceRole != NodeRole.Owner && sourceRole != NodeRole.Admin))
                 return Forbid();
 
             // Lock destination parent to prevent concurrent moves from corrupting its path
@@ -277,8 +299,8 @@ public class NodesController : ControllerBase
             var newParent = await _nodeRepo.GetByIdAsync(request.NewParentId, ct);
             if (newParent is null) return BadRequest("New parent node not found");
 
-            var destMembership = await _memberRepo.GetAsync(request.NewParentId, GetUserId(), ct);
-            if (destMembership is null || destMembership.Role == NodeRole.Viewer)
+            var destRole = await GetInheritedRoleByPathAsync(newParent.Path, ct);
+            if (destRole is null || destRole == NodeRole.Viewer)
                 return Forbid();
 
             // Prevent moving a node under its own descendant
@@ -341,15 +363,15 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
 
-        var callerMembership = await _memberRepo.GetAsync(id, GetUserId(), ct);
-        if (callerMembership is null || (callerMembership.Role != NodeRole.Owner && callerMembership.Role != NodeRole.Admin))
+        var callerRole = await GetInheritedRoleAsync(id, ct);
+        if (callerRole is null || (callerRole != NodeRole.Owner && callerRole != NodeRole.Admin))
             return Forbid();
 
         if (!Enum.TryParse<NodeRole>(request.Role, true, out var role))
             return BadRequest($"Invalid role '{request.Role}'. Valid values: {string.Join(", ", Enum.GetNames<NodeRole>())}");
 
         // Only Owners can grant Owner role
-        if (role == NodeRole.Owner && callerMembership.Role != NodeRole.Owner)
+        if (role == NodeRole.Owner && callerRole != NodeRole.Owner)
             return BadRequest("Only Owners can grant the Owner role.");
 
         var user = await _userRepo.GetByIdAsync(request.UserId, ct);
@@ -386,15 +408,15 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return NotFound();
 
-        var callerMembership = await _memberRepo.GetAsync(nodeId, GetUserId(), ct);
-        if (callerMembership is null || (callerMembership.Role != NodeRole.Owner && callerMembership.Role != NodeRole.Admin))
+        var callerRole = await GetInheritedRoleAsync(nodeId, ct);
+        if (callerRole is null || (callerRole != NodeRole.Owner && callerRole != NodeRole.Admin))
             return Forbid();
 
         var target = await _memberRepo.GetAsync(nodeId, userId, ct);
         if (target is null) return NotFound("Member not found.");
 
         // Admins cannot remove Owners
-        if (callerMembership.Role == NodeRole.Admin && target.Role == NodeRole.Owner)
+        if (callerRole == NodeRole.Admin && target.Role == NodeRole.Owner)
             return BadRequest("Admins cannot remove Owners.");
 
         // Prevent removing the last Owner — lock owner rows first, then count
