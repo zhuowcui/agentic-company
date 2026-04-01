@@ -4,6 +4,7 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
+using AgenticCompany.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,12 +18,14 @@ public class SpecsController : ControllerBase
     private readonly ISpecRepository _specRepo;
     private readonly INodeRepository _nodeRepo;
     private readonly INodeMemberRepository _memberRepo;
+    private readonly AppDbContext _db;
 
-    public SpecsController(ISpecRepository specRepo, INodeRepository nodeRepo, INodeMemberRepository memberRepo)
+    public SpecsController(ISpecRepository specRepo, INodeRepository nodeRepo, INodeMemberRepository memberRepo, AppDbContext db)
     {
         _specRepo = specRepo;
         _nodeRepo = nodeRepo;
         _memberRepo = memberRepo;
+        _db = db;
     }
 
     private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
@@ -65,20 +68,31 @@ public class SpecsController : ControllerBase
             Status = SpecStatus.Draft,
         };
 
-        var created = await _specRepo.CreateAsync(spec, ct);
-
-        // Create initial version
-        created.Versions.Add(new SpecVersion
+        using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            Id = Guid.NewGuid(),
-            SpecId = created.Id,
-            Version = 1,
-            Content = request.Content,
-            CreatedAt = DateTime.UtcNow,
-        });
-        await _specRepo.UpdateAsync(created, ct);
+            var created = await _specRepo.CreateAsync(spec, ct);
 
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToResponse(includeVersions: true));
+            // Create initial version
+            created.Versions.Add(new SpecVersion
+            {
+                Id = Guid.NewGuid(),
+                SpecId = created.Id,
+                Version = 1,
+                Content = request.Content,
+                CreatedAt = DateTime.UtcNow,
+            });
+            await _specRepo.UpdateAsync(created, ct);
+
+            await transaction.CommitAsync(ct);
+
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToResponse(includeVersions: true));
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 
     [HttpPut("api/specs/{id:guid}")]

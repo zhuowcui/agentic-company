@@ -224,6 +224,10 @@ public class NodesController : ControllerBase
         if (!Enum.TryParse<NodeRole>(request.Role, true, out var role))
             return BadRequest($"Invalid role '{request.Role}'. Valid values: {string.Join(", ", Enum.GetNames<NodeRole>())}");
 
+        // Only Owners can grant Owner role
+        if (role == NodeRole.Owner && callerMembership.Role != NodeRole.Owner)
+            return BadRequest("Only Owners can grant the Owner role.");
+
         var user = await _userRepo.GetByIdAsync(request.UserId, ct);
         if (user is null)
             return BadRequest("User not found.");

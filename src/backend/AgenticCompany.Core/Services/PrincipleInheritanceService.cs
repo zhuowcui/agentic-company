@@ -14,15 +14,14 @@ public class PrincipleInheritanceService
         var effective = new List<EffectivePrinciple>();
         var overriddenTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // ancestorPrinciples should be ordered root-first
-        // First, collect all overrides from the target node
-        var targetPrinciples = ancestorPrinciples
-            .FirstOrDefault(x => x.NodeId == targetNodeId)
-            .Principles ?? [];
-
-        foreach (var p in targetPrinciples.Where(p => p.IsOverride))
+        // Walk from root to target, tracking overrides at every level
+        foreach (var (nodeId, principles) in ancestorPrinciples)
         {
-            overriddenTitles.Add(p.Title);
+            // Collect overrides at this level
+            foreach (var p in principles.Where(p => p.IsOverride))
+            {
+                overriddenTitles.Add(p.Title);
+            }
         }
 
         // Walk from root to target, adding principles
@@ -31,7 +30,8 @@ public class PrincipleInheritanceService
             foreach (var principle in principles.OrderBy(p => p.Order))
             {
                 bool isTarget = nodeId == targetNodeId;
-                bool isOverridden = !isTarget && overriddenTitles.Contains(principle.Title);
+                // A principle is overridden if a same-titled override exists at a deeper level
+                bool isOverridden = overriddenTitles.Contains(principle.Title) && !principle.IsOverride;
 
                 effective.Add(new EffectivePrinciple(
                     principle,
