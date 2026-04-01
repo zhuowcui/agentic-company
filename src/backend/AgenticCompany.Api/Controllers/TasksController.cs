@@ -3,6 +3,7 @@ using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
 using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
+using AgenticCompany.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,17 +17,20 @@ public class TasksController : ControllerBase
     private readonly IPlanRepository _planRepo;
     private readonly ISpecRepository _specRepo;
     private readonly INodeRepository _nodeRepo;
+    private readonly AppDbContext _db;
 
     public TasksController(
         ITaskItemRepository taskRepo,
         IPlanRepository planRepo,
         ISpecRepository specRepo,
-        INodeRepository nodeRepo)
+        INodeRepository nodeRepo,
+        AppDbContext db)
     {
         _taskRepo = taskRepo;
         _planRepo = planRepo;
         _specRepo = specRepo;
         _nodeRepo = nodeRepo;
+        _db = db;
     }
 
     [HttpGet("api/plans/{planId:guid}/tasks")]
@@ -102,36 +106,60 @@ public class TasksController : ControllerBase
         var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId, ct);
         if (targetNode is null) return BadRequest("Target node not found");
 
-        // Update the task's TargetNodeId to the value from the request
-        task.TargetNodeId = request.TargetNodeId;
+        // Validate that target node is a descendant of the spec's owning node
+        var plan = await _planRepo.GetByIdAsync(task.PlanId, ct);
+        if (plan is null) return NotFound("Plan not found");
+        
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound("Spec not found");
+        
+        var sourceNode = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
+        if (sourceNode is null) return NotFound("Source node not found");
+        
+        if (!targetNode.Path.StartsWith(sourceNode.Path + "."))
+            return BadRequest("Target node must be a descendant of the spec's owning node");
 
-        // Create a new spec on the target node from this task
-        var spec = new Spec
+        using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            NodeId = request.TargetNodeId,
-            Title = task.Title,
-            Status = SpecStatus.Draft,
-            SourceTaskId = task.Id,
-        };
+            // Update the task's TargetNodeId to the value from the request
+            task.TargetNodeId = request.TargetNodeId;
 
-        var createdSpec = await _specRepo.CreateAsync(spec, ct);
+            // Create a new spec on the target node from this task
+            var newSpec = new Spec
+            {
+                NodeId = request.TargetNodeId,
+                Title = task.Title,
+                Status = SpecStatus.Draft,
+                SourceTaskId = task.Id,
+            };
 
-        // Add initial version with the task description as content
-        createdSpec.Versions.Add(new SpecVersion
+            var createdSpec = await _specRepo.CreateAsync(newSpec, ct);
+
+            // Add initial version with the task description as content
+            createdSpec.Versions.Add(new SpecVersion
+            {
+                Id = Guid.NewGuid(),
+                SpecId = createdSpec.Id,
+                Version = 1,
+                Content = task.Description ?? task.Title,
+                CreatedAt = DateTime.UtcNow,
+            });
+            await _specRepo.UpdateAsync(createdSpec, ct);
+
+            // Update the task to mark it as cascaded
+            task.SpawnedSpecId = createdSpec.Id;
+            task.Status = TaskItemStatus.Cascaded;
+            await _taskRepo.UpdateAsync(task, ct);
+
+            await transaction.CommitAsync(ct);
+
+            return Created($"/api/specs/{createdSpec.Id}", new CascadeResponse(task.ToResponse(), createdSpec.ToResponse(includeVersions: true)));
+        }
+        catch
         {
-            Id = Guid.NewGuid(),
-            SpecId = createdSpec.Id,
-            Version = 1,
-            Content = task.Description ?? task.Title,
-            CreatedAt = DateTime.UtcNow,
-        });
-        await _specRepo.UpdateAsync(createdSpec, ct);
-
-        // Update the task to mark it as cascaded
-        task.SpawnedSpecId = createdSpec.Id;
-        task.Status = TaskItemStatus.Cascaded;
-        await _taskRepo.UpdateAsync(task, ct);
-
-        return Created($"/api/specs/{createdSpec.Id}", new CascadeResponse(task.ToResponse(), createdSpec.ToResponse(includeVersions: true)));
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 }

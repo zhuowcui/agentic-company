@@ -70,9 +70,16 @@ public class AgentController : ControllerBase
             """;
 
         var provider = request.Provider ?? _defaultProvider;
-        var draft = await _agentService.GenerateAsync(provider, prompt, context, ct);
-
-        return Ok(new DraftSpecResponse(draft));
+        
+        try
+        {
+            var draft = await _agentService.GenerateAsync(provider, prompt, context, ct);
+            return Ok(new DraftSpecResponse(draft));
+        }
+        catch (AgentProviderException ex)
+        {
+            return StatusCode(502, new { error = ex.Message });
+        }
     }
 
     /// <summary>Generate a plan with tasks from a spec</summary>
@@ -116,11 +123,17 @@ public class AgentController : ControllerBase
             """;
 
         var provider = request.Provider ?? _defaultProvider;
-        var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
-
-        var (planText, tasks) = ParsePlanResponse(result);
-
-        return Ok(new DraftPlanResponse(planText, tasks));
+        
+        try
+        {
+            var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
+            var (planText, tasks) = ParsePlanResponse(result);
+            return Ok(new DraftPlanResponse(planText, tasks));
+        }
+        catch (AgentProviderException ex)
+        {
+            return StatusCode(502, new { error = ex.Message });
+        }
     }
 
     /// <summary>Suggest which child node a task should cascade to</summary>
@@ -176,11 +189,17 @@ public class AgentController : ControllerBase
         var context = $"Parent node: {node.Name} (Type: {node.Type}, Depth: {node.Depth})";
 
         var provider = request.Provider ?? _defaultProvider;
-        var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
-
-        var (suggestedNodeId, suggestedNodeName, draftSpec) = ParseCascadeResponse(result, children);
-
-        return Ok(new SuggestCascadeResponse(suggestedNodeId, suggestedNodeName, draftSpec));
+        
+        try
+        {
+            var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
+            var (suggestedNodeId, suggestedNodeName, draftSpec) = ParseCascadeResponse(result, children);
+            return Ok(new SuggestCascadeResponse(suggestedNodeId, suggestedNodeName, draftSpec));
+        }
+        catch (AgentProviderException ex)
+        {
+            return StatusCode(502, new { error = ex.Message });
+        }
     }
 
     /// <summary>Review a spec against its node's principles</summary>
@@ -225,11 +244,17 @@ public class AgentController : ControllerBase
             """;
 
         var provider = request.Provider ?? _defaultProvider;
-        var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
-
-        var review = ParseReviewResponse(result);
-
-        return Ok(review);
+        
+        try
+        {
+            var result = await _agentService.GenerateAsync(provider, prompt, context, ct);
+            var review = ParseReviewResponse(result);
+            return Ok(review);
+        }
+        catch (AgentProviderException ex)
+        {
+            return StatusCode(502, new { error = ex.Message });
+        }
     }
 
     // --- Private helpers ---

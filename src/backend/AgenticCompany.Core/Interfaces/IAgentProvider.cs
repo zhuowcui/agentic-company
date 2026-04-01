@@ -1,5 +1,10 @@
 namespace AgenticCompany.Core.Interfaces;
 
+public class AgentProviderException : Exception
+{
+    public AgentProviderException(string message) : base(message) { }
+}
+
 public interface IAgentProvider
 {
     string Name { get; }

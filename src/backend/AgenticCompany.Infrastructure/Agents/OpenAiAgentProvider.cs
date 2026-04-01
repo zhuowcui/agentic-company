@@ -34,7 +34,7 @@ public class OpenAiAgentProvider : IAgentProvider
     public async Task<string> GenerateAsync(string prompt, string context, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(_apiKey))
-            return "[OpenAI provider is not configured. Set Agent:OpenAI:ApiKey in configuration or the OPENAI_API_KEY environment variable.]";
+            throw new AgentProviderException("OpenAI provider is not configured. Set Agent:OpenAI:ApiKey in configuration.");
 
         var request = BuildRequest(prompt, context, stream: false);
         var json = JsonSerializer.Serialize(request, JsonOptions);
@@ -45,7 +45,7 @@ public class OpenAiAgentProvider : IAgentProvider
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(ct);
-            return $"[OpenAI API error ({response.StatusCode}): {errorBody}]";
+            throw new AgentProviderException($"OpenAI API error ({response.StatusCode}): {errorBody}");
         }
 
         var responseJson = await response.Content.ReadAsStringAsync(ct);
@@ -62,7 +62,7 @@ public class OpenAiAgentProvider : IAgentProvider
     public Task<IAsyncEnumerable<string>> StreamAsync(string prompt, string context, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(_apiKey))
-            return Task.FromResult(SingleChunk("[OpenAI provider is not configured. Set Agent:OpenAI:ApiKey in configuration or the OPENAI_API_KEY environment variable.]"));
+            throw new AgentProviderException("OpenAI provider is not configured. Set Agent:OpenAI:ApiKey in configuration.");
 
         return Task.FromResult(StreamInternal(prompt, context, ct));
     }

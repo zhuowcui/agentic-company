@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace AgenticCompany.Api.Controllers;
@@ -50,7 +51,14 @@ public class AuthController : ControllerBase
             PasswordHash = _passwordHasher.HashPassword(null!, request.Password),
         };
 
-        user = await _users.CreateAsync(user);
+        try
+        {
+            user = await _users.CreateAsync(user);
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { message = "Email already registered" });
+        }
 
         var token = GenerateToken(user);
         return Ok(new AuthResponse(token, new UserInfo(user.Id, user.Email, user.DisplayName)));

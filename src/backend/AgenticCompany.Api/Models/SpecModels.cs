@@ -1,7 +1,7 @@
 namespace AgenticCompany.Api.Models;
 
 public record CreateSpecRequest(string Title, string Content);
-public record UpdateSpecRequest(string Content);
+public record UpdateSpecRequest(string? Title, string Content);
 
 public record SpecResponse(
     Guid Id,

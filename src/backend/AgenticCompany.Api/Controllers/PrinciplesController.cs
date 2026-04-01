@@ -94,6 +94,11 @@ public class PrinciplesController : ControllerBase
         var principle = principles.FirstOrDefault(p => p.Id == principleId);
         if (principle is null) return NotFound("Principle not found");
 
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest("Title is required");
+        if (string.IsNullOrWhiteSpace(request.Content))
+            return BadRequest("Content is required");
+
         principle.Title = request.Title;
         principle.Content = request.Content;
         principle.Order = request.Order;

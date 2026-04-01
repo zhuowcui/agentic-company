@@ -302,7 +302,7 @@ function TaskCard({
                 ))}
             </select>
           )}
-          {task.status !== 'Cascaded' && task.targetNodeId && (
+          {task.status !== 'Cascaded' && (
             <button
               onClick={onCascade}
               className="px-3 py-1 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"

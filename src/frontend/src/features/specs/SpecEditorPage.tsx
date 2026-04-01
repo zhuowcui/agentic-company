@@ -76,7 +76,7 @@ export function SpecEditorPage({ specId, nodeId, onNavigate }: SpecEditorPagePro
 
     if (isEditing && specId) {
       updateSpec.mutate(
-        { id: specId, data: { content } },
+        { id: specId, data: { title, content } },
         { onSuccess: () => onNavigate('specs') }
       );
     } else if (effectiveNodeId) {

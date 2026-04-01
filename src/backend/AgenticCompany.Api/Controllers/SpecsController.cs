@@ -5,6 +5,7 @@ using AgenticCompany.Core.Enums;
 using AgenticCompany.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgenticCompany.Api.Controllers;
 
@@ -74,6 +75,8 @@ public class SpecsController : ControllerBase
         var spec = await _specRepo.GetByIdAsync(id, ct);
         if (spec is null) return NotFound();
 
+        if (request.Title is not null) spec.Title = request.Title;
+
         var latestVersion = spec.Versions?.MaxBy(v => v.Version)?.Version ?? 0;
         spec.Versions ??= new List<SpecVersion>();
         spec.Versions.Add(new SpecVersion
@@ -85,8 +88,15 @@ public class SpecsController : ControllerBase
             CreatedAt = DateTime.UtcNow,
         });
 
-        await _specRepo.UpdateAsync(spec, ct);
-        return Ok(spec.ToResponse(includeVersions: true));
+        try
+        {
+            await _specRepo.UpdateAsync(spec, ct);
+            return Ok(spec.ToResponse(includeVersions: true));
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "Spec was modified concurrently. Please reload and try again." });
+        }
     }
 
     [HttpPost("api/specs/{id:guid}/approve")]

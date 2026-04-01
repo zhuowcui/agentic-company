@@ -7,6 +7,7 @@ export interface CreateSpecData {
 }
 
 export interface UpdateSpecData {
+  title?: string;
   content: string;
 }
 
