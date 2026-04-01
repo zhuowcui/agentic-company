@@ -15,12 +15,14 @@ public class PlansController : ControllerBase
 {
     private readonly IPlanRepository _planRepo;
     private readonly ISpecRepository _specRepo;
+    private readonly INodeRepository _nodeRepo;
     private readonly INodeMemberRepository _memberRepo;
 
-    public PlansController(IPlanRepository planRepo, ISpecRepository specRepo, INodeMemberRepository memberRepo)
+    public PlansController(IPlanRepository planRepo, ISpecRepository specRepo, INodeRepository nodeRepo, INodeMemberRepository memberRepo)
     {
         _planRepo = planRepo;
         _specRepo = specRepo;
+        _nodeRepo = nodeRepo;
         _memberRepo = memberRepo;
     }
 
@@ -34,8 +36,11 @@ public class PlansController : ControllerBase
     private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return false;
+        var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        return memberships.Any(m => ancestorIds.Contains(m.NodeId));
     }
 
     [HttpGet("api/specs/{specId:guid}/plans")]

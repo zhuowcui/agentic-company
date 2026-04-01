@@ -38,8 +38,12 @@ public class SpecsController : ControllerBase
     private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
-        return membership != null;
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return false;
+        // Read access inherits downward: check membership on node or any ancestor
+        var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        return memberships.Any(m => ancestorIds.Contains(m.NodeId));
     }
 
     [HttpGet("api/nodes/{nodeId:guid}/specs")]

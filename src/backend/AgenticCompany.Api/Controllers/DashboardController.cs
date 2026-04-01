@@ -12,11 +12,13 @@ namespace AgenticCompany.Api.Controllers;
 public class DashboardController : ControllerBase
 {
     private readonly IDashboardRepository _dashboardRepo;
+    private readonly INodeRepository _nodeRepo;
     private readonly INodeMemberRepository _memberRepo;
 
-    public DashboardController(IDashboardRepository dashboardRepo, INodeMemberRepository memberRepo)
+    public DashboardController(IDashboardRepository dashboardRepo, INodeRepository nodeRepo, INodeMemberRepository memberRepo)
     {
         _dashboardRepo = dashboardRepo;
+        _nodeRepo = nodeRepo;
         _memberRepo = memberRepo;
     }
 
@@ -25,8 +27,12 @@ public class DashboardController : ControllerBase
 
     private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
     {
-        var membership = await _memberRepo.GetAsync(nodeId, GetUserId(), ct);
-        return membership != null;
+        var userId = GetUserId();
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return false;
+        var ancestorIds = node.Path.Split('.').Select(Guid.Parse).ToHashSet();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        return memberships.Any(m => ancestorIds.Contains(m.NodeId));
     }
 
     [HttpGet("node/{nodeId}/stats")]
