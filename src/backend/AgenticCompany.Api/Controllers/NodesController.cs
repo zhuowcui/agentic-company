@@ -31,12 +31,41 @@ public class NodesController : ControllerBase
     private Guid GetUserId() =>
         Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>List root nodes</summary>
+    private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
+    {
+        var membership = await _memberRepo.GetAsync(nodeId, GetUserId(), ct);
+        return membership != null;
+    }
+
+    /// <summary>List root nodes accessible to the caller</summary>
     [HttpGet]
     public async Task<ActionResult<List<NodeResponse>>> GetRoots(CancellationToken ct)
     {
+        var userId = GetUserId();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        var memberNodeIds = memberships.Select(m => m.NodeId).ToHashSet();
+
         var nodes = await _nodeRepo.GetRootsAsync(ct);
-        return Ok(nodes.Select(n => n.ToResponse()).ToList());
+        // Return only roots the caller is a member of, or roots that are ancestors of nodes they belong to
+        var accessibleRoots = new List<Node>();
+        foreach (var root in nodes)
+        {
+            if (memberNodeIds.Contains(root.Id))
+            {
+                accessibleRoots.Add(root);
+                continue;
+            }
+            // Check if any membership node has this root as ancestor (path starts with root path)
+            var rootPath = root.Path;
+            // Load all nodes for this user's memberships and check if any descend from this root
+            var descendants = await _nodeRepo.GetDescendantsByPathPrefixAsync(rootPath, ct);
+            if (descendants.Any(d => memberNodeIds.Contains(d.Id)))
+            {
+                accessibleRoots.Add(root);
+            }
+        }
+
+        return Ok(accessibleRoots.Select(n => n.ToResponse()).ToList());
     }
 
     /// <summary>Get a single node by ID</summary>
@@ -45,6 +74,10 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
+
+        if (!await HasReadAccessAsync(id, ct))
+            return Forbid();
+
         return Ok(node.ToResponse());
     }
 
@@ -54,6 +87,10 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetWithChildrenAsync(id, ct);
         if (node is null) return NotFound();
+
+        if (!await HasReadAccessAsync(id, ct))
+            return Forbid();
+
         return Ok(node.ToResponse(includeChildren: true));
     }
 
@@ -204,6 +241,9 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
+
+        if (!await HasReadAccessAsync(id, ct))
+            return Forbid();
 
         var members = await _memberRepo.GetByNodeIdAsync(id, ct);
         return Ok(members.Select(m => new NodeMemberResponse(

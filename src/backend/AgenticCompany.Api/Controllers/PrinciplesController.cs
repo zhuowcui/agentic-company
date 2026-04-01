@@ -39,12 +39,22 @@ public class PrinciplesController : ControllerBase
         return membership != null && membership.Role != NodeRole.Viewer;
     }
 
+    private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
+    }
+
     /// <summary>Get local principles for a node</summary>
     [HttpGet]
     public async Task<ActionResult<List<PrincipleResponse>>> GetByNode(Guid nodeId, CancellationToken ct)
     {
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return NotFound("Node not found");
+
+        if (!await HasReadAccessAsync(nodeId, ct))
+            return Forbid();
 
         var principles = await _principleRepo.GetByNodeIdAsync(nodeId, ct);
         return Ok(principles.Select(p => p.ToResponse()).ToList());
@@ -56,6 +66,9 @@ public class PrinciplesController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
         if (node is null) return NotFound("Node not found");
+
+        if (!await HasReadAccessAsync(nodeId, ct))
+            return Forbid();
 
         // Build the ancestor chain (root first) including the target node
         var ancestors = await _nodeRepo.GetAncestorsAsync(nodeId, ct);

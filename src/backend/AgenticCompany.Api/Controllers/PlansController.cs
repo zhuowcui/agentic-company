@@ -31,11 +31,21 @@ public class PlansController : ControllerBase
         return membership != null && membership.Role != NodeRole.Viewer;
     }
 
+    private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
+    }
+
     [HttpGet("api/specs/{specId:guid}/plans")]
     public async Task<ActionResult<List<PlanResponse>>> GetBySpec(Guid specId, CancellationToken ct)
     {
         var spec = await _specRepo.GetByIdAsync(specId, ct);
         if (spec is null) return NotFound(new { error = $"Spec {specId} not found." });
+
+        if (!await HasReadAccessAsync(spec.NodeId, ct))
+            return Forbid();
 
         var plans = await _planRepo.GetBySpecIdAsync(specId, ct);
         return Ok(plans.Select(p => p.ToResponse()).ToList());
@@ -46,6 +56,13 @@ public class PlansController : ControllerBase
     {
         var plan = await _planRepo.GetByIdAsync(id, ct);
         if (plan is null) return NotFound();
+
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound();
+
+        if (!await HasReadAccessAsync(spec.NodeId, ct))
+            return Forbid();
+
         return Ok(plan.ToResponse(includeTasks: true));
     }
 

@@ -45,11 +45,24 @@ public class TasksController : ControllerBase
         return membership != null && membership.Role != NodeRole.Viewer;
     }
 
+    private async Task<bool> HasReadAccessAsync(Guid nodeId, CancellationToken ct)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
+        return membership != null;
+    }
+
     [HttpGet("api/plans/{planId:guid}/tasks")]
     public async Task<ActionResult<List<TaskItemResponse>>> GetByPlan(Guid planId, CancellationToken ct)
     {
         var plan = await _planRepo.GetByIdAsync(planId, ct);
         if (plan is null) return NotFound(new { error = $"Plan {planId} not found." });
+
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound();
+
+        if (!await HasReadAccessAsync(spec.NodeId, ct))
+            return Forbid();
 
         var tasks = await _taskRepo.GetByPlanIdAsync(planId, ct);
         return Ok(tasks.Select(t => t.ToResponse()).ToList());
@@ -60,6 +73,16 @@ public class TasksController : ControllerBase
     {
         var task = await _taskRepo.GetByIdAsync(id, ct);
         if (task is null) return NotFound();
+
+        var plan = await _planRepo.GetByIdAsync(task.PlanId, ct);
+        if (plan is null) return NotFound();
+
+        var spec = await _specRepo.GetByIdAsync(plan.SpecId, ct);
+        if (spec is null) return NotFound();
+
+        if (!await HasReadAccessAsync(spec.NodeId, ct))
+            return Forbid();
+
         return Ok(task.ToResponse());
     }
 
