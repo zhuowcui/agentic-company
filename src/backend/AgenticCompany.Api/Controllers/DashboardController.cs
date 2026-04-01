@@ -66,7 +66,11 @@ public class DashboardController : ControllerBase
     [HttpGet("org-overview")]
     public async Task<ActionResult<OrgOverviewResponse>> GetOrgOverview(CancellationToken ct)
     {
-        var overview = await _dashboardRepo.GetOrgOverviewAsync(ct);
+        var userId = GetUserId();
+        var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+        var accessibleNodeIds = memberships.Select(m => m.NodeId).ToHashSet();
+
+        var overview = await _dashboardRepo.GetOrgOverviewAsync(accessibleNodeIds, ct);
 
         return Ok(new OrgOverviewResponse(
             overview.NodesByType,

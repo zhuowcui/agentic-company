@@ -29,5 +29,5 @@ public interface IDashboardRepository
 {
     Task<NodeStats?> GetNodeStatsAsync(Guid nodeId, CancellationToken ct = default);
     Task<List<ActivityItemDto>?> GetNodeActivityAsync(Guid nodeId, CancellationToken ct = default);
-    Task<OrgOverview> GetOrgOverviewAsync(CancellationToken ct = default);
+    Task<OrgOverview> GetOrgOverviewAsync(ISet<Guid> accessibleNodeIds, CancellationToken ct = default);
 }

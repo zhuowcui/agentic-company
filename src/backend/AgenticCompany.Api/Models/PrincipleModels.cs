@@ -1,7 +1,18 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AgenticCompany.Api.Models;
 
-public record CreatePrincipleRequest(string Title, string Content, int Order, bool IsOverride = false);
-public record UpdatePrincipleRequest(string Title, string Content, int Order, bool IsOverride);
+public record CreatePrincipleRequest(
+    [Required][MaxLength(200)] string Title,
+    [Required][MaxLength(50000)] string Content,
+    int Order,
+    bool IsOverride = false);
+
+public record UpdatePrincipleRequest(
+    [Required][MaxLength(200)] string Title,
+    [Required][MaxLength(50000)] string Content,
+    int Order,
+    bool IsOverride);
 
 public record PrincipleResponse(
     Guid Id,

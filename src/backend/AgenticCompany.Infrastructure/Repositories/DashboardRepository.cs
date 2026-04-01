@@ -85,23 +85,26 @@ public class DashboardRepository : IDashboardRepository
             .ToList();
     }
 
-    public async Task<OrgOverview> GetOrgOverviewAsync(CancellationToken ct = default)
+    public async Task<OrgOverview> GetOrgOverviewAsync(ISet<Guid> accessibleNodeIds, CancellationToken ct = default)
     {
+        var nodeIdList = accessibleNodeIds.ToList();
+
         var nodesByType = await _db.Nodes
+            .Where(n => nodeIdList.Contains(n.Id))
             .GroupBy(n => n.Type)
             .Select(g => new { Type = g.Key.ToString(), Count = g.Count() })
             .ToDictionaryAsync(x => x.Type, x => x.Count, ct);
 
-        var totalNodes = await _db.Nodes.CountAsync(ct);
-        var totalSpecs = await _db.Specs.CountAsync(ct);
-        var totalPlans = await _db.Plans.CountAsync(ct);
-        var totalTasks = await _db.TaskItems.CountAsync(ct);
+        var totalNodes = await _db.Nodes.CountAsync(n => nodeIdList.Contains(n.Id), ct);
+        var totalSpecs = await _db.Specs.CountAsync(s => nodeIdList.Contains(s.NodeId), ct);
+        var totalPlans = await _db.Plans.CountAsync(p => nodeIdList.Contains(p.Spec.NodeId), ct);
+        var totalTasks = await _db.TaskItems.CountAsync(t => nodeIdList.Contains(t.Plan.Spec.NodeId), ct);
 
         // Cascade depth: count longest chain of Spec→Plan→Task(cascaded)→Spec→...
 
         // Step 1: Find all specs that were spawned from a task (cascaded specs)
         var cascadedSpecs = await _db.Specs
-            .Where(s => s.SourceTaskId != null)
+            .Where(s => s.SourceTaskId != null && nodeIdList.Contains(s.NodeId))
             .Select(s => new { ChildSpecId = s.Id, s.SourceTaskId })
             .ToListAsync(ct);
 
