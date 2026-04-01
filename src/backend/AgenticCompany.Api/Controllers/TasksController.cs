@@ -83,8 +83,12 @@ public class TasksController : ControllerBase
         if (request.AssignedTo != null) task.AssignedTo = request.AssignedTo;
         if (request.TargetNodeId.HasValue) task.TargetNodeId = request.TargetNodeId;
         if (request.Order.HasValue) task.Order = request.Order.Value;
-        if (request.Status != null && Enum.TryParse<TaskItemStatus>(request.Status, true, out var status))
+        if (request.Status != null)
+        {
+            if (!Enum.TryParse<TaskItemStatus>(request.Status, true, out var status))
+                return BadRequest($"Invalid status '{request.Status}'. Valid values: {string.Join(", ", Enum.GetNames<TaskItemStatus>())}");
             task.Status = status;
+        }
 
         await _taskRepo.UpdateAsync(task, ct);
         return Ok(task.ToResponse());

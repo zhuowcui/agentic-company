@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AgenticCompany.Api.Mapping;
 using AgenticCompany.Api.Models;
 using AgenticCompany.Core.Entities;
@@ -14,11 +15,16 @@ namespace AgenticCompany.Api.Controllers;
 public class NodesController : ControllerBase
 {
     private readonly INodeRepository _nodeRepo;
+    private readonly INodeMemberRepository _memberRepo;
 
-    public NodesController(INodeRepository nodeRepo)
+    public NodesController(INodeRepository nodeRepo, INodeMemberRepository memberRepo)
     {
         _nodeRepo = nodeRepo;
+        _memberRepo = memberRepo;
     }
+
+    private Guid GetUserId() =>
+        Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     /// <summary>List root nodes</summary>
     [HttpGet]
@@ -69,6 +75,15 @@ public class NodesController : ControllerBase
         };
 
         var created = await _nodeRepo.CreateAsync(node, ct);
+
+        // Auto-create the caller as Owner of the new node
+        await _memberRepo.CreateAsync(new NodeMember
+        {
+            NodeId = created.Id,
+            UserId = GetUserId(),
+            Role = NodeRole.Owner,
+        }, ct);
+
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created.ToResponse());
     }
 
@@ -78,6 +93,10 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
+
+        var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
+        if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
+            return Forbid();
 
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest("Name is required");
@@ -96,6 +115,10 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetWithChildrenAsync(id, ct);
         if (node is null) return NotFound();
 
+        var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
+        if (membership is null || membership.Role != NodeRole.Owner)
+            return Forbid();
+
         if (node.Children.Any())
             return Conflict("Cannot delete a node that has children. Move or delete children first.");
 
@@ -109,6 +132,10 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetByIdAsync(id, ct);
         if (node is null) return NotFound();
+
+        var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
+        if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
+            return Forbid();
 
         var newParent = await _nodeRepo.GetByIdAsync(request.NewParentId, ct);
         if (newParent is null) return BadRequest("New parent node not found");
@@ -141,5 +168,64 @@ public class NodesController : ControllerBase
         await _nodeRepo.UpdateRangeAsync(descendantNodes.Prepend(node), ct);
 
         return Ok(node.ToResponse());
+    }
+
+    /// <summary>List members of a node</summary>
+    [HttpGet("{id:guid}/members")]
+    public async Task<ActionResult<List<NodeMemberResponse>>> GetMembers(Guid id, CancellationToken ct)
+    {
+        var node = await _nodeRepo.GetByIdAsync(id, ct);
+        if (node is null) return NotFound();
+
+        var members = await _memberRepo.GetByNodeIdAsync(id, ct);
+        return Ok(members.Select(m => new NodeMemberResponse(
+            m.UserId, m.User.Email, m.User.DisplayName, m.Role.ToString(), m.JoinedAt)).ToList());
+    }
+
+    /// <summary>Add a member to a node</summary>
+    [HttpPost("{id:guid}/members")]
+    public async Task<ActionResult<NodeMemberResponse>> AddMember(Guid id, [FromBody] AddNodeMemberRequest request, CancellationToken ct)
+    {
+        var node = await _nodeRepo.GetByIdAsync(id, ct);
+        if (node is null) return NotFound();
+
+        var callerMembership = await _memberRepo.GetAsync(id, GetUserId(), ct);
+        if (callerMembership is null || (callerMembership.Role != NodeRole.Owner && callerMembership.Role != NodeRole.Admin))
+            return Forbid();
+
+        if (!Enum.TryParse<NodeRole>(request.Role, true, out var role))
+            return BadRequest($"Invalid role '{request.Role}'. Valid values: {string.Join(", ", Enum.GetNames<NodeRole>())}");
+
+        var existing = await _memberRepo.GetAsync(id, request.UserId, ct);
+        if (existing is not null)
+            return Conflict("User is already a member of this node.");
+
+        var member = await _memberRepo.CreateAsync(new NodeMember
+        {
+            NodeId = id,
+            UserId = request.UserId,
+            Role = role,
+        }, ct);
+
+        return Created($"/api/nodes/{id}/members", new NodeMemberResponse(
+            member.UserId, member.User?.Email ?? "", member.User?.DisplayName ?? "", member.Role.ToString(), member.JoinedAt));
+    }
+
+    /// <summary>Remove a member from a node</summary>
+    [HttpDelete("{nodeId:guid}/members/{userId:guid}")]
+    public async Task<IActionResult> RemoveMember(Guid nodeId, Guid userId, CancellationToken ct)
+    {
+        var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
+        if (node is null) return NotFound();
+
+        var callerMembership = await _memberRepo.GetAsync(nodeId, GetUserId(), ct);
+        if (callerMembership is null || (callerMembership.Role != NodeRole.Owner && callerMembership.Role != NodeRole.Admin))
+            return Forbid();
+
+        var target = await _memberRepo.GetAsync(nodeId, userId, ct);
+        if (target is null) return NotFound("Member not found.");
+
+        await _memberRepo.DeleteAsync(nodeId, userId, ct);
+        return NoContent();
     }
 }

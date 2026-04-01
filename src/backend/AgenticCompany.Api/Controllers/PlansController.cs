@@ -68,8 +68,12 @@ public class PlansController : ControllerBase
 
         if (request.Content is not null)
             plan.Content = request.Content;
-        if (request.Status != null && Enum.TryParse<PlanStatus>(request.Status, true, out var status))
+        if (request.Status != null)
+        {
+            if (!Enum.TryParse<PlanStatus>(request.Status, true, out var status))
+                return BadRequest($"Invalid status '{request.Status}'. Valid values: {string.Join(", ", Enum.GetNames<PlanStatus>())}");
             plan.Status = status;
+        }
 
         await _planRepo.UpdateAsync(plan, ct);
         return Ok(plan.ToResponse());
