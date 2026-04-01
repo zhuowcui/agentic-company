@@ -70,7 +70,7 @@ export function TasksPage({ planId, onNavigate }: TasksPageProps) {
     try {
       await updateTask.mutateAsync({ id: task.id, data: { status: newStatus } });
     } catch {
-      // Error displayed via mutation state
+      // Error surfaced via updateTask.error below
     }
   };
 
@@ -139,6 +139,12 @@ export function TasksPage({ planId, onNavigate }: TasksPageProps) {
           </button>
         ))}
       </div>
+
+      {updateTask.error && (
+        <p className="text-sm text-red-600 mb-4">
+          Status update failed: {updateTask.error.message}
+        </p>
+      )}
 
       {/* Create form */}
       {showCreateForm && (

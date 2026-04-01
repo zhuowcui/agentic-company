@@ -11,9 +11,9 @@ interface SpecEditorPageProps {
 }
 
 const PROVIDERS = [
-  { value: 'echo', label: 'Echo (Dev)' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'claude', label: 'Claude' },
+  { value: 'echo', label: 'Echo (Dev)' },
 ];
 
 export function SpecEditorPage({ specId, nodeId, onNavigate }: SpecEditorPageProps) {
@@ -25,7 +25,7 @@ export function SpecEditorPage({ specId, nodeId, onNavigate }: SpecEditorPagePro
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [provider, setProvider] = useState('echo');
+  const [provider, setProvider] = useState('openai');
   const [review, setReview] = useState<ReviewSpecResponse | null>(null);
 
   const createSpec = useCreateSpec();
@@ -87,6 +87,8 @@ export function SpecEditorPage({ specId, nodeId, onNavigate }: SpecEditorPagePro
     }
   };
 
+  const saveError = createSpec.error || updateSpec.error;
+
   if (specLoading && isEditing) {
     return <div className="text-gray-500">Loading spec...</div>;
   }
@@ -120,6 +122,12 @@ export function SpecEditorPage({ specId, nodeId, onNavigate }: SpecEditorPagePro
           {isSaving ? 'Saving...' : 'Save Spec'}
         </button>
       </div>
+
+      {saveError && (
+        <p className="text-sm text-red-600 mb-4">
+          Save failed: {saveError.message}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main editor */}

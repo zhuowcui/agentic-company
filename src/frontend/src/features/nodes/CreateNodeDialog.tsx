@@ -17,13 +17,17 @@ export function CreateNodeDialog({ parentId, onClose }: CreateNodeDialogProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createNode.mutateAsync({
-      name,
-      type,
-      description: description || null,
-      parentId: parentId ?? null,
-    });
-    onClose();
+    try {
+      await createNode.mutateAsync({
+        name,
+        type,
+        description: description || null,
+        parentId: parentId ?? null,
+      });
+      onClose();
+    } catch {
+      // Error surfaced via createNode.error below
+    }
   };
 
   return (
@@ -68,6 +72,11 @@ export function CreateNodeDialog({ parentId, onClose }: CreateNodeDialogProps) {
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
+            {createNode.error && (
+              <p className="flex-1 text-sm text-red-600 self-center">
+                {createNode.error.message}
+              </p>
+            )}
             <button
               type="button"
               onClick={onClose}

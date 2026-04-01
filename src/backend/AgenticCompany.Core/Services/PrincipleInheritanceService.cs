@@ -12,26 +12,28 @@ public class PrincipleInheritanceService
         Guid targetNodeId)
     {
         var effective = new List<EffectivePrinciple>();
-        var overriddenTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Walk from root to target, tracking overrides at every level
-        foreach (var (nodeId, principles) in ancestorPrinciples)
+        // Build a map: title → deepest index where an override exists
+        var overrideDepthByTitle = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < ancestorPrinciples.Count; i++)
         {
-            // Collect overrides at this level
-            foreach (var p in principles.Where(p => p.IsOverride))
+            foreach (var p in ancestorPrinciples[i].Principles.Where(p => p.IsOverride))
             {
-                overriddenTitles.Add(p.Title);
+                overrideDepthByTitle[p.Title] = i; // last (deepest) wins
             }
         }
 
         // Walk from root to target, adding principles
-        foreach (var (nodeId, principles) in ancestorPrinciples)
+        for (int i = 0; i < ancestorPrinciples.Count; i++)
         {
+            var (nodeId, principles) = ancestorPrinciples[i];
             foreach (var principle in principles.OrderBy(p => p.Order))
             {
                 bool isTarget = nodeId == targetNodeId;
-                // A principle is overridden if a same-titled override exists at a deeper level
-                bool isOverridden = overriddenTitles.Contains(principle.Title) && !principle.IsOverride;
+                // A principle is overridden only if a same-titled override exists at a deeper level
+                bool isOverridden = !principle.IsOverride
+                    && overrideDepthByTitle.TryGetValue(principle.Title, out var overrideIdx)
+                    && overrideIdx > i;
 
                 effective.Add(new EffectivePrinciple(
                     principle,

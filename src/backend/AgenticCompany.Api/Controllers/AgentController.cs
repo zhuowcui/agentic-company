@@ -45,7 +45,7 @@ public class AgentController : ControllerBase
         _principleRepo = principleRepo;
         _memberRepo = memberRepo;
         _principleService = principleService;
-        _defaultProvider = configuration["Agent:DefaultProvider"] ?? "echo";
+        _defaultProvider = configuration["Agent:DefaultProvider"] ?? "";
     }
 
     private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
