@@ -69,8 +69,11 @@ public class NodesController : ControllerBase
                 accessibleRootIds.Add(rootId);
         }
 
-        var roots = await _nodeRepo.GetRootsAsync(ct);
-        var accessibleRoots = roots.Where(r => accessibleRootIds.Contains(r.Id)).ToList();
+        // Only fetch the roots the user can access (not all roots in the system)
+        var accessibleRoots = await _nodeRepo.GetByIdsAsync(
+            accessibleRootIds.Where(id => true), ct);
+        // Filter to actual roots (ParentId == null) in case a membership path is corrupt
+        accessibleRoots = accessibleRoots.Where(n => n.ParentId == null).ToList();
 
         return Ok(accessibleRoots.Select(n => n.ToResponse()).ToList());
     }
@@ -194,52 +197,58 @@ public class NodesController : ControllerBase
     [HttpPatch("{id:guid}/move")]
     public async Task<ActionResult<NodeResponse>> Move(Guid id, [FromBody] MoveNodeRequest request, CancellationToken ct)
     {
-        var node = await _nodeRepo.GetByIdAsync(id, ct);
-        if (node is null) return NotFound();
-
         if (id == request.NewParentId)
             return BadRequest("Cannot move a node under itself.");
 
-        var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
-        if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
-            return Forbid();
-
-        var newParent = await _nodeRepo.GetByIdAsync(request.NewParentId, ct);
-        if (newParent is null) return BadRequest("New parent node not found");
-
-        // Issue 3: Check caller has membership on destination parent
-        var destMembership = await _memberRepo.GetAsync(request.NewParentId, GetUserId(), ct);
-        if (destMembership is null || destMembership.Role == NodeRole.Viewer)
-            return Forbid();
-
-        // Prevent moving a node under its own descendant
-        var descendants = await _nodeRepo.GetDescendantsAsync(id, ct);
-        if (descendants.Any(d => d.Id == request.NewParentId))
-            return BadRequest("Cannot move a node under its own descendant");
-
-        var oldPath = node.Path;
-        var oldDepth = node.Depth;
-
-        // Fetch descendants by old path prefix before changing the node
-        var descendantNodes = await _nodeRepo.GetDescendantsByPathPrefixAsync(oldPath, ct);
-
-        // Update the moved node
-        node.ParentId = request.NewParentId;
-        node.Path = $"{newParent.Path}.{node.Id}";
-        node.Depth = newParent.Depth + 1;
-
-        var depthDelta = node.Depth - oldDepth;
-
-        // Update all descendants' paths and depths
-        foreach (var desc in descendantNodes)
+        using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            desc.Path = node.Path + desc.Path[oldPath.Length..];
-            desc.Depth += depthDelta;
+            var node = await _nodeRepo.GetByIdAsync(id, ct);
+            if (node is null) return NotFound();
+
+            var membership = await _memberRepo.GetAsync(id, GetUserId(), ct);
+            if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
+                return Forbid();
+
+            var newParent = await _nodeRepo.GetByIdAsync(request.NewParentId, ct);
+            if (newParent is null) return BadRequest("New parent node not found");
+
+            var destMembership = await _memberRepo.GetAsync(request.NewParentId, GetUserId(), ct);
+            if (destMembership is null || destMembership.Role == NodeRole.Viewer)
+                return Forbid();
+
+            // Prevent moving a node under its own descendant
+            var descendants = await _nodeRepo.GetDescendantsAsync(id, ct);
+            if (descendants.Any(d => d.Id == request.NewParentId))
+                return BadRequest("Cannot move a node under its own descendant");
+
+            var oldPath = node.Path;
+            var oldDepth = node.Depth;
+
+            var descendantNodes = await _nodeRepo.GetDescendantsByPathPrefixAsync(oldPath, ct);
+
+            node.ParentId = request.NewParentId;
+            node.Path = $"{newParent.Path}.{node.Id}";
+            node.Depth = newParent.Depth + 1;
+
+            var depthDelta = node.Depth - oldDepth;
+
+            foreach (var desc in descendantNodes)
+            {
+                desc.Path = node.Path + desc.Path[oldPath.Length..];
+                desc.Depth += depthDelta;
+            }
+
+            await _nodeRepo.UpdateRangeAsync(descendantNodes.Prepend(node), ct);
+            await transaction.CommitAsync(ct);
+
+            return Ok(node.ToResponse());
         }
-
-        await _nodeRepo.UpdateRangeAsync(descendantNodes.Prepend(node), ct);
-
-        return Ok(node.ToResponse());
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 
     /// <summary>List members of a node</summary>

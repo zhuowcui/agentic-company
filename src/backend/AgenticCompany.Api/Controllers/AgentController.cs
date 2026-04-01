@@ -7,15 +7,18 @@ using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AgenticCompany.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[EnableRateLimiting("agent")]
 [Route("api/agent")]
 public class AgentController : ControllerBase
 {
     private readonly string _defaultProvider;
+    private readonly ILogger<AgentController> _logger;
 
     private readonly IAgentService _agentService;
     private readonly INodeRepository _nodeRepo;
@@ -35,7 +38,8 @@ public class AgentController : ControllerBase
         IPrincipleRepository principleRepo,
         INodeMemberRepository memberRepo,
         PrincipleInheritanceService principleService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<AgentController> logger)
     {
         _agentService = agentService;
         _nodeRepo = nodeRepo;
@@ -46,6 +50,7 @@ public class AgentController : ControllerBase
         _memberRepo = memberRepo;
         _principleService = principleService;
         _defaultProvider = configuration["Agent:DefaultProvider"] ?? "";
+        _logger = logger;
     }
 
     private async Task<bool> IsNodeMemberAsync(Guid nodeId, CancellationToken ct)
@@ -93,7 +98,8 @@ public class AgentController : ControllerBase
         }
         catch (AgentProviderException ex)
         {
-            return StatusCode(502, new { error = ex.Message });
+            _logger.LogError(ex, "Agent provider error during draft-spec for node {NodeId}", request.NodeId);
+            return StatusCode(502, new { error = "AI provider request failed. Please try again later." });
         }
     }
 
@@ -150,7 +156,8 @@ public class AgentController : ControllerBase
         }
         catch (AgentProviderException ex)
         {
-            return StatusCode(502, new { error = ex.Message });
+            _logger.LogError(ex, "Agent provider error during draft-plan for spec {SpecId}", request.SpecId);
+            return StatusCode(502, new { error = "AI provider request failed. Please try again later." });
         }
     }
 
@@ -219,7 +226,8 @@ public class AgentController : ControllerBase
         }
         catch (AgentProviderException ex)
         {
-            return StatusCode(502, new { error = ex.Message });
+            _logger.LogError(ex, "Agent provider error during suggest-cascade for task {TaskId}", request.TaskId);
+            return StatusCode(502, new { error = "AI provider request failed. Please try again later." });
         }
     }
 
@@ -277,7 +285,8 @@ public class AgentController : ControllerBase
         }
         catch (AgentProviderException ex)
         {
-            return StatusCode(502, new { error = ex.Message });
+            _logger.LogError(ex, "Agent provider error during review-spec for spec {SpecId}", request.SpecId);
+            return StatusCode(502, new { error = "AI provider request failed. Please try again later." });
         }
     }
 

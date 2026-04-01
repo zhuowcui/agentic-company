@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { queryClient } from '../../lib/query-client';
 
 interface AppShellProps {
   children: ReactNode;
@@ -11,6 +12,7 @@ export function AppShell({ children, onNavigate, currentPage }: AppShellProps) {
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
+    queryClient.clear();
     onNavigate?.('login');
   };
 

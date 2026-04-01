@@ -74,9 +74,20 @@ public class DashboardController : ControllerBase
     {
         var userId = GetUserId();
         var memberships = await _memberRepo.GetByUserIdAsync(userId, ct);
+
+        // Start with directly accessible node IDs
         var accessibleNodeIds = memberships.Select(m => m.NodeId).ToHashSet();
 
-        var overview = await _dashboardRepo.GetOrgOverviewAsync(accessibleNodeIds, ct);
+        // Expand to include all descendants of accessible nodes (inherited downward access)
+        var descendantNodes = new HashSet<Guid>(accessibleNodeIds);
+        foreach (var nodeId in accessibleNodeIds)
+        {
+            var descendants = await _nodeRepo.GetDescendantsAsync(nodeId, ct);
+            foreach (var d in descendants)
+                descendantNodes.Add(d.Id);
+        }
+
+        var overview = await _dashboardRepo.GetOrgOverviewAsync(descendantNodes, ct);
 
         return Ok(new OrgOverviewResponse(
             overview.NodesByType,

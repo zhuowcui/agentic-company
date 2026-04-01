@@ -46,23 +46,43 @@ public class NodeRepository : INodeRepository
             .OrderBy(n => n.Name)
             .ToListAsync(ct);
 
+    public async Task<List<Node>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0) return [];
+        return await _db.Nodes
+            .Where(n => idList.Contains(n.Id))
+            .OrderBy(n => n.Name)
+            .ToListAsync(ct);
+    }
+
     public async Task<List<Node>> GetAncestorsAsync(Guid nodeId, CancellationToken ct = default)
     {
         var node = await _db.Nodes.FirstOrDefaultAsync(n => n.Id == nodeId, ct);
         if (node == null) return [];
 
-        var ancestors = new List<Node>();
-        var visited = new HashSet<Guid>();
-        var currentId = node.ParentId;
-        while (currentId.HasValue)
-        {
-            var parent = await _db.Nodes.FirstOrDefaultAsync(n => n.Id == currentId.Value, ct);
-            if (parent == null) break;
-            if (!visited.Add(parent.Id)) break; // cycle detected
-            ancestors.Insert(0, parent);
-            currentId = parent.ParentId;
-        }
-        return ancestors;
+        // Parse ancestor IDs from the materialized path (all segments except the last = self)
+        var pathSegments = node.Path.Split('.');
+        var ancestorIds = pathSegments
+            .Take(pathSegments.Length - 1)
+            .Select(s => Guid.TryParse(s, out var id) ? id : (Guid?)null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .ToList();
+
+        if (ancestorIds.Count == 0) return [];
+
+        // Single batch query instead of N+1
+        var ancestors = await _db.Nodes
+            .Where(n => ancestorIds.Contains(n.Id))
+            .ToListAsync(ct);
+
+        // Return in path order (root first → immediate parent last)
+        return ancestorIds
+            .Select(id => ancestors.FirstOrDefault(n => n.Id == id))
+            .Where(n => n is not null)
+            .Select(n => n!)
+            .ToList();
     }
 
     public async Task<List<Node>> GetDescendantsAsync(Guid nodeId, CancellationToken ct = default)
