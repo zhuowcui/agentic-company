@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AgenticCompany.Api.Models;
 
 // --- Requests ---
 
-public record DraftSpecRequest(Guid NodeId, string Prompt, string? Provider = null);
-public record DraftPlanRequest(Guid SpecId, string? Prompt = null, string? Provider = null);
+public record DraftSpecRequest(Guid NodeId, [property: Required, MaxLength(2000)] string Prompt, string? Provider = null);
+public record DraftPlanRequest(Guid SpecId, [property: MaxLength(2000)] string? Prompt = null, string? Provider = null);
 public record SuggestCascadeRequest(Guid TaskId, string? Provider = null);
 public record ReviewSpecRequest(Guid SpecId, string? Provider = null);
 

@@ -64,10 +64,7 @@ public class NodesController : ControllerBase
         var accessibleRootIds = new HashSet<Guid>();
         foreach (var membership in memberships)
         {
-            // Load the node to get its path
-            var node = await _nodeRepo.GetByIdAsync(membership.NodeId, ct);
-            if (node is null) continue;
-            var rootIdStr = node.Path.Split('.')[0];
+            var rootIdStr = membership.Node.Path.Split('.')[0];
             if (Guid.TryParse(rootIdStr, out var rootId))
                 accessibleRootIds.Add(rootId);
         }

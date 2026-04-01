@@ -19,6 +19,7 @@ public class NodeMemberRepository : INodeMemberRepository
     public async Task<List<NodeMember>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
         => await _db.NodeMembers
             .Include(m => m.User)
+            .Include(m => m.Node)
             .Where(m => m.UserId == userId)
             .ToListAsync(ct);
 
