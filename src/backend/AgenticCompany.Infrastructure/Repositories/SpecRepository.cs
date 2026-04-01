@@ -36,7 +36,10 @@ public class SpecRepository : ISpecRepository
     public async Task UpdateAsync(Spec spec, CancellationToken ct = default)
     {
         spec.UpdatedAt = DateTime.UtcNow;
-        _db.Specs.Update(spec);
+        // Don't call _db.Specs.Update(spec) — it marks the entire graph as Modified,
+        // which causes new SpecVersions (with non-default GUIDs) to be treated as
+        // existing entities rather than inserts. Since the spec is already tracked
+        // by the change tracker, SaveChangesAsync detects modifications and additions.
         await _db.SaveChangesAsync(ct);
     }
 }

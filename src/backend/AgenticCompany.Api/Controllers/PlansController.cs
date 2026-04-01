@@ -66,7 +66,8 @@ public class PlansController : ControllerBase
         var plan = await _planRepo.GetByIdAsync(id, ct);
         if (plan is null) return NotFound();
 
-        plan.Content = request.Content;
+        if (request.Content is not null)
+            plan.Content = request.Content;
         if (request.Status != null && Enum.TryParse<PlanStatus>(request.Status, true, out var status))
             plan.Status = status;
 

@@ -15,9 +15,30 @@ public class NodeRepository : INodeRepository
         => await _db.Nodes.FirstOrDefaultAsync(n => n.Id == id, ct);
 
     public async Task<Node?> GetWithChildrenAsync(Guid id, CancellationToken ct = default)
-        => await _db.Nodes
-            .Include(n => n.Children)
-            .FirstOrDefaultAsync(n => n.Id == id, ct);
+    {
+        var root = await _db.Nodes.FirstOrDefaultAsync(n => n.Id == id, ct);
+        if (root is null) return null;
+
+        // Load the full subtree using the materialized path, then assemble in memory
+        var descendants = await _db.Nodes
+            .Where(n => n.Path.StartsWith(root.Path + "."))
+            .OrderBy(n => n.Depth)
+            .ToListAsync(ct);
+
+        var lookup = new Dictionary<Guid, Node> { [root.Id] = root };
+        root.Children = new List<Node>();
+
+        foreach (var node in descendants)
+        {
+            node.Children = new List<Node>();
+            lookup[node.Id] = node;
+
+            if (node.ParentId.HasValue && lookup.TryGetValue(node.ParentId.Value, out var parent))
+                parent.Children.Add(node);
+        }
+
+        return root;
+    }
 
     public async Task<List<Node>> GetRootsAsync(CancellationToken ct = default)
         => await _db.Nodes
