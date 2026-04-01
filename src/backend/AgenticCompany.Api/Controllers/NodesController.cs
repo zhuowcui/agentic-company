@@ -270,6 +270,10 @@ public class NodesController : ControllerBase
             if (membership is null || (membership.Role != NodeRole.Owner && membership.Role != NodeRole.Admin))
                 return Forbid();
 
+            // Lock destination parent to prevent concurrent moves from corrupting its path
+            await _db.Database.ExecuteSqlAsync(
+                $"""SELECT "Id" FROM "Nodes" WHERE "Id" = {request.NewParentId} FOR UPDATE""", ct);
+
             var newParent = await _nodeRepo.GetByIdAsync(request.NewParentId, ct);
             if (newParent is null) return BadRequest("New parent node not found");
 
@@ -393,22 +397,22 @@ public class NodesController : ControllerBase
         if (callerMembership.Role == NodeRole.Admin && target.Role == NodeRole.Owner)
             return BadRequest("Admins cannot remove Owners.");
 
-        // Prevent removing the last Owner — use FOR UPDATE lock to prevent write skew
+        // Prevent removing the last Owner — lock owner rows first, then count
         if (target.Role == NodeRole.Owner)
         {
             using var transaction = await _db.Database.BeginTransactionAsync(ct);
             try
             {
                 // Lock all owner membership rows for this node to prevent concurrent removal
-                var ownerCount = await _db.Database
-                    .SqlQuery<int>($"""
-                        SELECT COUNT(*)::int AS "Value" FROM "NodeMembers"
+                var ownerIds = await _db.Database
+                    .SqlQuery<Guid>($"""
+                        SELECT "UserId" AS "Value" FROM "NodeMembers"
                         WHERE "NodeId" = {nodeId} AND "Role" = 'Owner'
                         FOR UPDATE
                         """)
-                    .FirstAsync(ct);
+                    .ToListAsync(ct);
 
-                if (ownerCount <= 1)
+                if (ownerIds.Count <= 1)
                     return BadRequest("Cannot remove the last Owner of a node.");
 
                 await _memberRepo.DeleteAsync(nodeId, userId, ct);

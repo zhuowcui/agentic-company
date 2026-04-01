@@ -114,7 +114,8 @@ public class TasksController : ControllerBase
             if (!await IsNodeMemberAsync(request.TargetNodeId.Value, ct))
                 return Forbid();
             var sourceNode = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
-            if (sourceNode is not null && !targetNode.Path.StartsWith(sourceNode.Path + "."))
+            if (sourceNode is null) return BadRequest("Source node not found.");
+            if (!targetNode.Path.StartsWith(sourceNode.Path + "."))
                 return BadRequest("Target node must be a descendant of the spec's owning node.");
         }
 
@@ -165,7 +166,8 @@ public class TasksController : ControllerBase
             if (!await IsNodeMemberAsync(request.TargetNodeId.Value, ct))
                 return Forbid();
             var sourceNode = await _nodeRepo.GetByIdAsync(spec.NodeId, ct);
-            if (sourceNode is not null && !targetNode.Path.StartsWith(sourceNode.Path + "."))
+            if (sourceNode is null) return BadRequest("Source node not found.");
+            if (!targetNode.Path.StartsWith(sourceNode.Path + "."))
                 return BadRequest("Target node must be a descendant of the spec's owning node.");
             task.TargetNodeId = request.TargetNodeId;
         }
