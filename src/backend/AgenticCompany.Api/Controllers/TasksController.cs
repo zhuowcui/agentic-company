@@ -7,6 +7,7 @@ using AgenticCompany.Core.Interfaces;
 using AgenticCompany.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgenticCompany.Api.Controllers;
 
@@ -167,6 +168,9 @@ public class TasksController : ControllerBase
         if (!await IsNodeMemberAsync(spec.NodeId, ct))
             return Forbid();
 
+        if (!await IsNodeMemberAsync(request.TargetNodeId, ct))
+            return Forbid();
+
         using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
         {
@@ -203,6 +207,11 @@ public class TasksController : ControllerBase
             await transaction.CommitAsync(ct);
 
             return Created($"/api/specs/{createdSpec.Id}", new CascadeResponse(task.ToResponse(), createdSpec.ToResponse(includeVersions: true)));
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(ct);
+            return Conflict("Task was already cascaded by another request.");
         }
         catch
         {

@@ -165,7 +165,7 @@ public class NodesController : ControllerBase
 
         // Issue 3: Check caller has membership on destination parent
         var destMembership = await _memberRepo.GetAsync(request.NewParentId, GetUserId(), ct);
-        if (destMembership is null)
+        if (destMembership is null || destMembership.Role == NodeRole.Viewer)
             return Forbid();
 
         // Prevent moving a node under its own descendant
@@ -256,6 +256,19 @@ public class NodesController : ControllerBase
 
         var target = await _memberRepo.GetAsync(nodeId, userId, ct);
         if (target is null) return NotFound("Member not found.");
+
+        // Admins cannot remove Owners
+        if (callerMembership.Role == NodeRole.Admin && target.Role == NodeRole.Owner)
+            return BadRequest("Admins cannot remove Owners.");
+
+        // Prevent removing the last Owner
+        if (target.Role == NodeRole.Owner)
+        {
+            var members = await _memberRepo.GetByNodeIdAsync(nodeId, ct);
+            var ownerCount = members.Count(m => m.Role == NodeRole.Owner);
+            if (ownerCount <= 1)
+                return BadRequest("Cannot remove the last Owner of a node.");
+        }
 
         await _memberRepo.DeleteAsync(nodeId, userId, ct);
         return NoContent();

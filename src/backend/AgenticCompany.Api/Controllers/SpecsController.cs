@@ -31,6 +31,7 @@ public class SpecsController : ControllerBase
         var membership = await _memberRepo.GetAsync(nodeId, userId, ct);
         return membership != null && membership.Role != NodeRole.Viewer;
     }
+    [HttpGet("api/nodes/{nodeId:guid}/specs")]
     public async Task<ActionResult<List<SpecResponse>>> GetByNode(Guid nodeId, CancellationToken ct)
     {
         var node = await _nodeRepo.GetByIdAsync(nodeId, ct);
