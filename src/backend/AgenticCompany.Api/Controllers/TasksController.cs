@@ -105,6 +105,8 @@ public class TasksController : ControllerBase
         {
             var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId.Value, ct);
             if (targetNode is null) return BadRequest("Target node not found.");
+            if (!await IsNodeMemberAsync(request.TargetNodeId.Value, ct))
+                return Forbid();
         }
 
         var task = new TaskItem
@@ -144,6 +146,8 @@ public class TasksController : ControllerBase
         {
             var targetNode = await _nodeRepo.GetByIdAsync(request.TargetNodeId.Value, ct);
             if (targetNode is null) return BadRequest("Target node not found.");
+            if (!await IsNodeMemberAsync(request.TargetNodeId.Value, ct))
+                return Forbid();
             task.TargetNodeId = request.TargetNodeId;
         }
         if (request.Order.HasValue) task.Order = request.Order.Value;

@@ -78,11 +78,11 @@ public class DashboardController : ControllerBase
         // Start with directly accessible node IDs
         var accessibleNodeIds = memberships.Select(m => m.NodeId).ToHashSet();
 
-        // Expand to include all descendants of accessible nodes (inherited downward access)
+        // Expand to include all descendants using pre-loaded Node paths (no N+1)
         var descendantNodes = new HashSet<Guid>(accessibleNodeIds);
-        foreach (var nodeId in accessibleNodeIds)
+        foreach (var membership in memberships)
         {
-            var descendants = await _nodeRepo.GetDescendantsAsync(nodeId, ct);
+            var descendants = await _nodeRepo.GetDescendantsByPathPrefixAsync(membership.Node.Path, ct);
             foreach (var d in descendants)
                 descendantNodes.Add(d.Id);
         }

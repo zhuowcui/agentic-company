@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiFetch } from '../client';
+import { queryClient } from '../../lib/query-client';
 
 export interface UserInfo {
   id: string;
@@ -20,6 +21,7 @@ export function useLogin() {
         body: JSON.stringify(data),
       }),
     onSuccess: (data) => {
+      queryClient.clear();
       localStorage.setItem('auth_token', data.token);
     },
   });
@@ -33,6 +35,7 @@ export function useRegister() {
         body: JSON.stringify(data),
       }),
     onSuccess: (data) => {
+      queryClient.clear();
       localStorage.setItem('auth_token', data.token);
     },
   });
