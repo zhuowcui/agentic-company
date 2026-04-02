@@ -8,7 +8,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     public AppDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseNpgsql("Host=localhost;Database=agentic_company;Username=postgres;Password=postgres");
+        optionsBuilder.UseNpgsql("Host=localhost;Database=agentic_company;Username=agentic;Password=dev_password");
         return new AppDbContext(optionsBuilder.Options);
     }
 }
