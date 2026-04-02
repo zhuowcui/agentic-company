@@ -3,12 +3,12 @@ using System.ComponentModel.DataAnnotations;
 namespace AgenticCompany.Api.Models;
 
 public record CreateSpecRequest(
-    [property: Required][property: MaxLength(200)] string Title,
-    [property: Required][property: MaxLength(50000)] string Content);
+    [Required][MaxLength(200)] string Title,
+    [Required][MaxLength(50000)] string Content);
 
 public record UpdateSpecRequest(
-    [property: MaxLength(200)] string? Title,
-    [property: Required][property: MaxLength(50000)] string Content);
+    [MaxLength(200)] string? Title,
+    [Required][MaxLength(50000)] string Content);
 
 public record SpecResponse(
     Guid Id,

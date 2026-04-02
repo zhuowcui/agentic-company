@@ -3,11 +3,11 @@ using System.ComponentModel.DataAnnotations;
 namespace AgenticCompany.Api.Models;
 
 public record CreatePlanRequest(
-    [property: Required][property: MaxLength(50000)] string Content,
-    [property: Required][property: MaxLength(200)] string PlanType);
+    [Required][MaxLength(50000)] string Content,
+    [Required][MaxLength(200)] string PlanType);
 
 public record UpdatePlanRequest(
-    [property: MaxLength(50000)] string? Content,
+    [MaxLength(50000)] string? Content,
     string? Status);
 
 public record PlanResponse(

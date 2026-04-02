@@ -4,8 +4,8 @@ namespace AgenticCompany.Api.Models;
 
 // --- Requests ---
 
-public record DraftSpecRequest(Guid NodeId, [property: Required, MaxLength(2000)] string Prompt, string? Provider = null);
-public record DraftPlanRequest(Guid SpecId, [property: MaxLength(2000)] string? Prompt = null, string? Provider = null);
+public record DraftSpecRequest(Guid NodeId, [Required, MaxLength(2000)] string Prompt, string? Provider = null);
+public record DraftPlanRequest(Guid SpecId, [MaxLength(2000)] string? Prompt = null, string? Provider = null);
 public record SuggestCascadeRequest(Guid TaskId, string? Provider = null);
 public record ReviewSpecRequest(Guid SpecId, string? Provider = null);
 
